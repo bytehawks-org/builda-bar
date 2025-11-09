@@ -478,9 +478,6 @@ jobs:
             version: "${{ vars.ALPINE_STABLE_VERSION }}"
           - name: stream
             version: "${{ vars.ALPINE_STREAM_VERSION }}"
-        platform:
-          - linux/amd64
-          - linux/arm64
     
     permissions:
       contents: read
@@ -505,20 +502,21 @@ jobs:
           username: ${{ vars.HARBOR_CICD_IMAGES_USER_NAME }}
           password: ${{ secrets.HARBOR_CICD_IMAGES_USER_PASSWORD }}
 
-      - name: Generate image reference
+      - name: Generate image reference (amd64 only)
         id: image
         run: |
           BASE_IMAGE="${{ env.BUILD_IMAGE }}"
-          ARCH=$(echo "${{ matrix.platform }}" | cut -d'/' -f2)
           VARIANT="${{ matrix.alpine_variant.name }}"
           BUILD_VERSION="${{ needs.build.outputs.build-version }}"
 
-          IMAGE_REF="${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME_GHCR }}:${BUILD_VERSION}-${BASE_IMAGE}-${{ matrix.alpine_variant.version }}-${VARIANT}-${ARCH}"
+          # Scansiona l'immagine amd64 (nativa del runner)
+          # Il runner ubuntu-latest è sempre amd64, quindi scansionare arm64 non è possibile
+          IMAGE_REF="${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME_GHCR }}:${BUILD_VERSION}-${BASE_IMAGE}-${{ matrix.alpine_variant.version }}-${VARIANT}-amd64"
 
           echo "base_image=${BASE_IMAGE}" >> $GITHUB_OUTPUT
           echo "image_ref=${IMAGE_REF}" >> $GITHUB_OUTPUT
           echo "variant=${VARIANT}" >> $GITHUB_OUTPUT
-          echo "arch=${ARCH}" >> $GITHUB_OUTPUT
+          echo "arch=amd64" >> $GITHUB_OUTPUT
           echo "build_version=${BUILD_VERSION}" >> $GITHUB_OUTPUT
 
       - name: Run Trivy vulnerability scan
@@ -526,7 +524,7 @@ jobs:
         with:
           image-ref: ${{ steps.image.outputs.image_ref }}
           format: 'sarif'
-          output: 'trivy-${{ steps.image.outputs.variant }}-${{ steps.image.outputs.arch }}.sarif'
+          output: 'trivy-${{ steps.image.outputs.variant }}-amd64.sarif'
           severity: 'CRITICAL,HIGH'
           exit-code: '0'
           version: 'v0.67.2'
@@ -536,35 +534,35 @@ jobs:
         with:
           image-ref: ${{ steps.image.outputs.image_ref }}
           format: 'cyclonedx'
-          output: 'sbom-${{ steps.image.outputs.variant }}-${{ steps.image.outputs.arch }}.json'
+          output: 'sbom-${{ steps.image.outputs.variant }}-amd64.json'
 
       - name: Upload Trivy SARIF to GitHub Security
         uses: github/codeql-action/upload-sarif@v3
         if: always()
         with:
-          sarif_file: 'trivy-${{ steps.image.outputs.variant }}-${{ steps.image.outputs.arch }}.sarif'
-          category: 'trivy-${{ steps.image.outputs.variant }}-${{ steps.image.outputs.arch }}'
+          sarif_file: 'trivy-${{ steps.image.outputs.variant }}-amd64.sarif'
+          category: 'trivy-${{ steps.image.outputs.variant }}-amd64'
 
       - name: Upload SBOM artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: sbom-${{ steps.image.outputs.variant }}-${{ steps.image.outputs.arch }}
+          name: sbom-${{ steps.image.outputs.variant }}-amd64
           path: sbom-*.json
           retention-days: 2555
 
       - name: Upload Scan Reports
         uses: actions/upload-artifact@v4
         with:
-          name: scan-${{ steps.image.outputs.variant }}-${{ steps.image.outputs.arch }}
+          name: scan-${{ steps.image.outputs.variant }}-amd64
           path: trivy-*.sarif
           retention-days: 2555
 
       - name: Evaluate security posture
         if: always()
         run: |
-          echo "=== Security Posture Summary (${{ steps.image.outputs.arch }}) ==="
+          echo "=== Security Posture Summary (amd64) ==="
           
-          TRIVY_REPORT="trivy-${{ steps.image.outputs.variant }}-${{ steps.image.outputs.arch }}.sarif"
+          TRIVY_REPORT="trivy-${{ steps.image.outputs.variant }}-amd64.sarif"
           
           if [ -f "$TRIVY_REPORT" ]; then
             TRIVY_CRITICAL=$(jq '[.runs[0].results[] | select(.level == "error")] | length' "$TRIVY_REPORT")
