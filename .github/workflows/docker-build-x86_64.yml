@@ -1,4 +1,4 @@
-name: Build builda-bar Container Images
+name: Build x86_64 "builda-bar" Container Images
 
 on:
   push:
