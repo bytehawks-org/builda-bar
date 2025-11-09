@@ -1,9 +1,9 @@
-name: Build arm64 "builda-bar" Container Images
+name: Build x86_64 "builda-bar" Container Images
 
 on:
   push:
     tags:
-      - 'v[0-9]+.[0-9]+.[0-9]+-[0-9]{8}'
+      - 'v*.*.*-????????'
   workflow_dispatch:
     inputs:
       tag_override:
@@ -93,14 +93,14 @@ jobs:
           BUILD_VERSION="${{ steps.version.outputs.build_version }}"
           
           TAGS_GHCR="${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME_GHCR }}:${VARIANT}-${ARCH}"
-          TAGS_GHCR="${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME_GHCR }}:${BASE_IMAGE}-${VARIANT}-${ARCH}"
+          TAGS_GHCR="${TAGS_GHCR},${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME_GHCR }}:${BASE_IMAGE}-${VARIANT}-${ARCH}"
           TAGS_GHCR="${TAGS_GHCR},${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME_GHCR }}:${BASE_IMAGE}-${VERSION}-${VARIANT}-${ARCH}"
           TAGS_GHCR="${TAGS_GHCR},${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME_GHCR }}:${BUILD_VERSION}-${BASE_IMAGE}-${VERSION}-${VARIANT}-${ARCH}"
           
-          TAGS_HARBOR="${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME_GHCR }}:${VARIANT}-${ARCH}"
-          TAGS_HARBOR="${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME_GHCR }}:${BASE_IMAGE}-${VARIANT}-${ARCH}"
-          TAGS_HARBOR="${TAGS_GHCR},${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME_GHCR }}:${BASE_IMAGE}-${VERSION}-${VARIANT}-${ARCH}"
-          TAGS_HARBOR="${TAGS_GHCR},${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME_GHCR }}:${BUILD_VERSION}-${BASE_IMAGE}-${VERSION}-${VARIANT}-${ARCH}"
+          TAGS_HARBOR="${{ env.REGISTRY_HARBOR }}/${{ env.IMAGE_NAME_HARBOR }}:${VARIANT}-${ARCH}"
+          TAGS_HARBOR="${TAGS_HARBOR},${{ env.REGISTRY_HARBOR }}/${{ env.IMAGE_NAME_HARBOR }}:${BASE_IMAGE}-${VARIANT}-${ARCH}"
+          TAGS_HARBOR="${TAGS_HARBOR},${{ env.REGISTRY_HARBOR }}/${{ env.IMAGE_NAME_HARBOR }}:${BASE_IMAGE}-${VERSION}-${VARIANT}-${ARCH}"
+          TAGS_HARBOR="${TAGS_HARBOR},${{ env.REGISTRY_HARBOR }}/${{ env.IMAGE_NAME_HARBOR }}:${BUILD_VERSION}-${BASE_IMAGE}-${VERSION}-${VARIANT}-${ARCH}"
           
           ALL_TAGS="${TAGS_GHCR},${TAGS_HARBOR}"
           
@@ -131,6 +131,7 @@ jobs:
             ${{ steps.meta.outputs.labels }}
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.version=${{ steps.version.outputs.build_version }}
+            org.opencontainers.image.description="builda-bar base container image builder based on Alpine ${{ matrix.alpine_variant.version }} arm64"
           build-args: |
             ALPINE_VERSION=${{ matrix.alpine_variant.version }}
             VARIANT_NAME=${{ matrix.alpine_variant.name }}
