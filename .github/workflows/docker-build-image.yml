@@ -304,13 +304,24 @@ jobs:
           sudo mv /tmp/regctl /usr/local/bin/regctl
           regctl version
 
-      - name: Log in to GitHub Container Registry
-        run: regctl login "${{ env.REGISTRY_GHCR }}" -u "${{ github.actor }}" -p "${{ secrets.GITHUB_TOKEN }}"
+      - name: Log in to GitHub Container Registry (docker)
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY_GHCR }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Log in to Harbor Registry
-        run: regctl login "${{ env.REGISTRY_HARBOR }}" -u "${{ vars.HARBOR_CICD_IMAGES_USER_NAME }}" -p "${{ secrets.HARBOR_CICD_IMAGES_USER_PASSWORD }}"
+      - name: Log in to Harbor Registry (docker)
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY_HARBOR }}
+          username: ${{ vars.HARBOR_CICD_IMAGES_USER_NAME }}
+          password: ${{ secrets.HARBOR_CICD_IMAGES_USER_PASSWORD }}
 
       - name: Create and push manifest indices - GHCR
+        env:
+          GHCR_USER: ${{ github.actor }}
+          GHCR_PASS: ${{ secrets.GITHUB_TOKEN }}
         run: |
           BASE_IMAGE="${{ env.BUILD_IMAGE }}"
           VARIANT="${{ matrix.alpine_variant.name }}"
@@ -328,9 +339,9 @@ jobs:
           echo "  x86_64: $IMAGE_AMD64"
           echo "  arm64:  $IMAGE_ARM64"
           
-          # Recupera i digest delle immagini
-          DIGEST_AMD64=$(regctl image digest "$IMAGE_AMD64")
-          DIGEST_ARM64=$(regctl image digest "$IMAGE_ARM64")
+          # Recupera i digest delle immagini con autenticazione stdin
+          DIGEST_AMD64=$(echo "$GHCR_PASS" | regctl image digest "$IMAGE_AMD64" --user "$GHCR_USER" --pass-stdin)
+          DIGEST_ARM64=$(echo "$GHCR_PASS" | regctl image digest "$IMAGE_ARM64" --user "$GHCR_USER" --pass-stdin)
           
           echo "Digests:"
           echo "  AMD64: $DIGEST_AMD64"
@@ -365,25 +376,28 @@ jobs:
           
           # Layer 4: full release (multi-arch)
           MANIFEST_TAG_L4="${REGISTRY}/${IMAGE_NAME}:${BUILD_VERSION}-${BASE_IMAGE}-${VERSION}-${VARIANT}"
-          regctl manifest put "$MANIFEST_TAG_L4" <<<"$MANIFEST_INDEX"
+          echo "$GHCR_PASS" | regctl manifest put "$MANIFEST_TAG_L4" --user "$GHCR_USER" --pass-stdin <<<"$MANIFEST_INDEX"
           echo "✓ Pushed manifest: $MANIFEST_TAG_L4"
           
           # Layer 3: alpine-version-variant-specific
           MANIFEST_TAG_L3="${REGISTRY}/${IMAGE_NAME}:${BASE_IMAGE}-${VERSION}-${VARIANT}"
-          regctl manifest put "$MANIFEST_TAG_L3" <<<"$MANIFEST_INDEX"
+          echo "$GHCR_PASS" | regctl manifest put "$MANIFEST_TAG_L3" --user "$GHCR_USER" --pass-stdin <<<"$MANIFEST_INDEX"
           echo "✓ Pushed manifest: $MANIFEST_TAG_L3"
           
           # Layer 2: alpine-variant-specific
           MANIFEST_TAG_L2="${REGISTRY}/${IMAGE_NAME}:${BASE_IMAGE}-${VARIANT}"
-          regctl manifest put "$MANIFEST_TAG_L2" <<<"$MANIFEST_INDEX"
+          echo "$GHCR_PASS" | regctl manifest put "$MANIFEST_TAG_L2" --user "$GHCR_USER" --pass-stdin <<<"$MANIFEST_INDEX"
           echo "✓ Pushed manifest: $MANIFEST_TAG_L2"
           
           # Layer 1: variant-specific
           MANIFEST_TAG_L1="${REGISTRY}/${IMAGE_NAME}:${VARIANT}"
-          regctl manifest put "$MANIFEST_TAG_L1" <<<"$MANIFEST_INDEX"
+          echo "$GHCR_PASS" | regctl manifest put "$MANIFEST_TAG_L1" --user "$GHCR_USER" --pass-stdin <<<"$MANIFEST_INDEX"
           echo "✓ Pushed manifest: $MANIFEST_TAG_L1"
 
       - name: Create and push manifest indices - Harbor
+        env:
+          HARBOR_USER: ${{ vars.HARBOR_CICD_IMAGES_USER_NAME }}
+          HARBOR_PASS: ${{ secrets.HARBOR_CICD_IMAGES_USER_PASSWORD }}
         run: |
           BASE_IMAGE="${{ env.BUILD_IMAGE }}"
           VARIANT="${{ matrix.alpine_variant.name }}"
@@ -401,9 +415,9 @@ jobs:
           echo "  x86_64: $IMAGE_AMD64"
           echo "  arm64:  $IMAGE_ARM64"
           
-          # Recupera i digest
-          DIGEST_AMD64=$(regctl image digest "$IMAGE_AMD64")
-          DIGEST_ARM64=$(regctl image digest "$IMAGE_ARM64")
+          # Recupera i digest con autenticazione stdin
+          DIGEST_AMD64=$(echo "$HARBOR_PASS" | regctl image digest "$IMAGE_AMD64" --user "$HARBOR_USER" --pass-stdin)
+          DIGEST_ARM64=$(echo "$HARBOR_PASS" | regctl image digest "$IMAGE_ARM64" --user "$HARBOR_USER" --pass-stdin)
           
           echo "Digests:"
           echo "  AMD64: $DIGEST_AMD64"
@@ -438,22 +452,22 @@ jobs:
           
           # Layer 4: full release
           MANIFEST_TAG_L4="${REGISTRY}/${IMAGE_NAME}:${BUILD_VERSION}-${BASE_IMAGE}-${VERSION}-${VARIANT}"
-          regctl manifest put "$MANIFEST_TAG_L4" <<<"$MANIFEST_INDEX"
+          echo "$HARBOR_PASS" | regctl manifest put "$MANIFEST_TAG_L4" --user "$HARBOR_USER" --pass-stdin <<<"$MANIFEST_INDEX"
           echo "✓ Pushed manifest: $MANIFEST_TAG_L4"
           
           # Layer 3: alpine-version-variant-specific
           MANIFEST_TAG_L3="${REGISTRY}/${IMAGE_NAME}:${BASE_IMAGE}-${VERSION}-${VARIANT}"
-          regctl manifest put "$MANIFEST_TAG_L3" <<<"$MANIFEST_INDEX"
+          echo "$HARBOR_PASS" | regctl manifest put "$MANIFEST_TAG_L3" --user "$HARBOR_USER" --pass-stdin <<<"$MANIFEST_INDEX"
           echo "✓ Pushed manifest: $MANIFEST_TAG_L3"
           
           # Layer 2: alpine-variant-specific
           MANIFEST_TAG_L2="${REGISTRY}/${IMAGE_NAME}:${BASE_IMAGE}-${VARIANT}"
-          regctl manifest put "$MANIFEST_TAG_L2" <<<"$MANIFEST_INDEX"
+          echo "$HARBOR_PASS" | regctl manifest put "$MANIFEST_TAG_L2" --user "$HARBOR_USER" --pass-stdin <<<"$MANIFEST_INDEX"
           echo "✓ Pushed manifest: $MANIFEST_TAG_L2"
           
           # Layer 1: variant-specific
           MANIFEST_TAG_L1="${REGISTRY}/${IMAGE_NAME}:${VARIANT}"
-          regctl manifest put "$MANIFEST_TAG_L1" <<<"$MANIFEST_INDEX"
+          echo "$HARBOR_PASS" | regctl manifest put "$MANIFEST_TAG_L1" --user "$HARBOR_USER" --pass-stdin <<<"$MANIFEST_INDEX"
           echo "✓ Pushed manifest: $MANIFEST_TAG_L1"
 
   scan:
