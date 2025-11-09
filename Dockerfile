@@ -54,7 +54,4 @@ ENV ALPINE_VERSION="${ALPINE_VERSION}"
 ENV VARIANT_NAME="${VARIANT_NAME}"
 ENV BUILD_CONTAINER="builda-bar"
 
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8080/health || exit 1
-
 ENTRYPOINT ["/bin/bash"]
