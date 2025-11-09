@@ -31,7 +31,7 @@ jobs:
             version: "3.22.2"
         platform:
           - linux/amd64
-          - linux/arm64
+          #- linux/arm64
     
     outputs:
       image-digest: ${{ steps.build.outputs.digest }}
@@ -139,7 +139,7 @@ jobs:
             version: "3.22.2"
         platform:
           - linux/amd64
-          - linux/arm64
+          #- linux/arm64
     
     permissions:
       contents: read
@@ -202,14 +202,14 @@ jobs:
           fail-build: false
 
       - name: Upload Trivy SARIF to GitHub Security
-        uses: github/codeql-action/upload-sarif@v2
+        uses: github/codeql-action/upload-sarif@v3
         if: always()
         with:
           sarif_file: 'trivy-${{ steps.image.outputs.variant }}-${{ steps.image.outputs.arch }}.sarif'
           category: 'trivy-${{ steps.image.outputs.variant }}-${{ steps.image.outputs.arch }}'
 
       - name: Upload Grype SARIF to GitHub Security
-        uses: github/codeql-action/upload-sarif@v2
+        uses: github/codeql-action/upload-sarif@v3
         if: always()
         with:
           sarif_file: ${{ steps.grype.outputs.sarif }}
