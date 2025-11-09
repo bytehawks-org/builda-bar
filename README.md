@@ -1,7 +1,9 @@
 # builda-bar
 
-[![Build x86_64 "builda-bar" Container Images](https://github.com/bytehawks-org/builda-bar/actions/workflows/docker-build-x86_64.yml/badge.svg)](https://github.com/bytehawks-org/builda-bar/actions/workflows/docker-build-x86_64.yml)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+[![Build x86_64 "builda-bar" Container Images](https://github.com/bytehawks-org/builda-bar/actions/workflows/docker-build-x86_64.yml/badge.svg)](https://github.com/bytehawks-org/builda-bar/actions/workflows/docker-build-x86_64.yml)
+[![Build arm64 "builda-bar" Container Images](https://github.com/bytehawks-org/builda-bar/actions/workflows/docker-build-arm64.yml/badge.svg)](https://github.com/bytehawks-org/builda-bar/actions/workflows/docker-build-arm64.yml)
+
 
 Alpine-based build container for ByteHawks – enabling transparent, auditable software supply chains for European digital sovereignty (x86_64/Arm64).
 
@@ -37,23 +39,23 @@ Alpine-based build container for ByteHawks – enabling transparent, auditable s
 
 From GitHub Container Registry (GHCR):
 ```bash
-docker pull ghcr.io/bytehawks/bytehawks/builda-bar:stable-x86_64
+docker pull ghcr.io/bytehawks-org/builda-bar/builda-bar:stable-x86_64
 ```
 
 From ByteHawks Harbor Registry:
 ```bash
-docker pull registry.bytehawks.org/cicd-images/builda-bar:stable-x86_64
+docker pull registry.bytehawks.org/bytehawks-org/builda-bar:stable-x86_64
 ```
 
 ### Run the Container
 
 ```bash
-docker run --rm -it ghcr.io/bytehawks/bytehawks/builda-bar:stable-x86_64
+docker run --rm -it ghcr.io/bytehawks-org/builda-bar/builda-bar:stable-x86_64
 ```
 
 Or with mounted volumes for builds:
 ```bash
-docker run --rm -v $(pwd)/src:/build/src:ro -v $(pwd)/dist:/build/dist ghcr.io/bytehawks/bytehawks/builda-bar:stable-x86_64
+docker run --rm -v $(pwd)/src:/build/src:ro -v $(pwd)/dist:/build/dist ghcr.io/bytehawks-org/builda-bar/builda-bar:stable-x86_64
 ```
 
 ## Image Variants
@@ -62,19 +64,19 @@ docker run --rm -v $(pwd)/src:/build/src:ro -v $(pwd)/dist:/build/dist ghcr.io/b
 
 builda-bar is built across multiple Alpine Linux versions to support diverse use cases and stability requirements:
 
-| Variant | Alpine Version | Use Case | Status |
-|---------|----------------|----------|--------|
-| `old-legacy` | 3.15.11 | Long-term stability, legacy systems | Supported |
-| `legacy` | 3.20.8 | Extended LTS, conservative deployments | Supported |
-| `stable` | 3.21.5 | Recommended default, balanced approach | **Recommended** |
-| `stream` | 3.22.2 | Cutting-edge features, latest packages | Latest |
+| Variant | Alpine Version | Min. Kernel Version | Use Case | Status |
+|---------|----------------|---------------------|----------|--------|
+| `old-legacy` | 3.15.11 | 3.15 | Long-term stability, legacy systems | Supported |
+| `legacy` | 3.20.8 | 6.6 | Extended LTS, conservative deployments | Supported |
+| `stable` | 3.21.5 | 6.12 | Recommended default, balanced approach | **Recommended** |
+| `stream` | 3.22.2 | 6.12 | Cutting-edge features, latest packages | Latest |
 
 ### Platform Support
 
 | Platform | Status | Tag Suffix |
 |----------|--------|-----------|
 | x86_64 | ✅ Supported | `-x86_64` |
-| Arm64 | 🚧 Coming Soon | `-arm64` |
+| Arm64 | ✅ Supported  | `-arm64` |
 
 ## Pulling Images
 
@@ -84,34 +86,34 @@ GHCR is the primary public registry for builda-bar images.
 
 #### Latest Stable (Recommended)
 ```bash
-docker pull ghcr.io/bytehawks/bytehawks/builda-bar:stable-x86_64
+docker pull ghcr.io/bytehawks-org/builda-bar/builda-bar:stable-x86_64
 ```
 
 #### By Alpine Variant
 ```bash
 # Legacy LTS
-docker pull ghcr.io/bytehawks/bytehawks/builda-bar:legacy-x86_64
+docker pull ghcr.io/bytehawks-org/builda-bar/builda-bar:legacy-x86_64
 
 # Old Legacy (long-term support)
-docker pull ghcr.io/bytehawks/bytehawks/builda-bar:old-legacy-x86_64
+docker pull ghcr.io/bytehawks-org/builda-bar/builda-bar:old-legacy-x86_64
 
 # Stream (latest features)
-docker pull ghcr.io/bytehawks/bytehawks/builda-bar:stream-x86_64
+docker pull ghcr.io/bytehawks-org/builda-bar/builda-bar:stream-x86_64
 ```
 
 #### By Full Version and Alpine Release
 ```bash
-docker pull ghcr.io/bytehawks/bytehawks/builda-bar:alpine-3.21.5-stable-x86_64
+docker pull ghcr.io/bytehawks-org/builda-bar/builda-bar:alpine-3.21.5-stable-x86_64
 ```
 
 #### By Release Version
 ```bash
-docker pull ghcr.io/bytehawks/bytehawks/builda-bar:v1.0.0-20250101-alpine-stable-x86_64
+docker pull ghcr.io/bytehawks-org/builda-bar/builda-bar:v1.0.0-20250101-alpine-stable-x86_64
 ```
 
 #### By Digest (Immutable Reference)
 ```bash
-docker pull ghcr.io/bytehawks/bytehawks/builda-bar@sha256:abc123def456...
+docker pull ghcr.io/bytehawks-org/builda-bar/builda-bar@sha256:abc123def456...
 ```
 
 ### From ByteHawks Harbor Registry
@@ -120,25 +122,25 @@ Harbor registry provides additional isolation and enterprise-grade features for 
 
 #### Latest Stable
 ```bash
-docker pull registry.bytehawks.org/cicd-images/builda-bar:stable-x86_64
+docker pull registry.bytehawks.org/bytehawks-org/builda-bar:stable-x86_64
 ```
 
 #### By Alpine Variant
 ```bash
-docker pull registry.bytehawks.org/cicd-images/builda-bar:legacy-x86_64
-docker pull registry.bytehawks.org/cicd-images/builda-bar:old-legacy-x86_64
-docker pull registry.bytehawks.org/cicd-images/builda-bar:stream-x86_64
+docker pull registry.bytehawks.org/bytehawks-org/builda-bar:legacy-x86_64
+docker pull registry.bytehawks.org/bytehawks-org/builda-bar:old-legacy-x86_64
+docker pull registry.bytehawks.org/bytehawks-org/builda-bar:stream-x86_64
 ```
 
 #### By Full Version
 ```bash
-docker pull registry.bytehawks.org/cicd-images/builda-bar:alpine-3.21.5-stable-x86_64
-docker pull registry.bytehawks.org/cicd-images/builda-bar:v1.0.0-20250101-alpine-stable-x86_64
+docker pull registry.bytehawks.org/bytehawks-org/builda-bar:alpine-3.21.5-stable-x86_64
+docker pull registry.bytehawks.org/bytehawks-org/builda-bar:v1.0.0-20250101-alpine-stable-x86_64
 ```
 
 #### By Digest (Immutable Reference)
 ```bash
-docker pull registry.bytehawks.org/cicd-images/builda-bar@sha256:abc123def456...
+docker pull registry.bytehawks.org/bytehawks-org/builda-bar@sha256:abc123def456...
 ```
 
 ### Authentication
@@ -146,7 +148,7 @@ docker pull registry.bytehawks.org/cicd-images/builda-bar@sha256:abc123def456...
 #### GHCR (GitHub Container Registry)
 ```bash
 # Public access (no authentication required)
-docker pull ghcr.io/bytehawks/bytehawks/builda-bar:stable-x86_64
+docker pull ghcr.io/bytehawks-org/builda-bar/builda-bar:stable-x86_64
 
 # With authentication (optional, for higher rate limits)
 echo $GITHUB_TOKEN | docker login ghcr.io -u USERNAME --password-stdin
@@ -262,24 +264,24 @@ docker run ghcr.io/sigstore/cosign:latest version
 ```bash
 # Verify signature
 cosign verify --certificate-identity-regexp="https://github.com/bytehawks/bytehawks" \
-  ghcr.io/bytehawks/bytehawks/builda-bar:stable-x86_64
+  ghcr.io/bytehawks-org/builda-bar/builda-bar:stable-x86_64
 
 # Verify and inspect attestation
-cosign verify-attestation ghcr.io/bytehawks/bytehawks/builda-bar:stable-x86_64
+cosign verify-attestation ghcr.io/bytehawks-org/builda-bar/builda-bar:stable-x86_64
 ```
 
 #### Verify Harbor Image
 
 ```bash
 cosign verify --certificate-identity-regexp="https://github.com/bytehawks/bytehawks" \
-  registry.bytehawks.org/cicd-images/builda-bar:stable-x86_64
+  registry.bytehawks.org/bytehawks-org/builda-bar:stable-x86_64
 ```
 
 #### Verify by Digest
 
 ```bash
 cosign verify --certificate-identity-regexp="https://github.com/bytehawks/bytehawks" \
-  ghcr.io/bytehawks/bytehawks/builda-bar@sha256:bbdc920d45050a03710b3e4e814010602abc2ede0f111ce282481148a27de615
+  ghcr.io/bytehawks-org/builda-bar/builda-bar@sha256:bbdc920d45050a03710b3e4e814010602abc2ede0f111ce282481148a27de615
 ```
 
 ### Kubernetes Admission Control
@@ -368,7 +370,7 @@ Each image includes comprehensive OpenContainer Initiative (OCI) metadata:
 
 ```bash
 # Inspect metadata
-docker inspect ghcr.io/bytehawks/bytehawks/builda-bar:stable-x86_64 | jq '.[0].Config.Labels'
+docker inspect ghcr.io/bytehawks-org/builda-bar/builda-bar:stable-x86_64 | jq '.[0].Config.Labels'
 ```
 
 ### Available Labels
