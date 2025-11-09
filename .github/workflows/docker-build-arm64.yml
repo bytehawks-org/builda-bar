@@ -1,4 +1,4 @@
-name: Build x86_64 "builda-bar" Container Images
+name: Build arm64 "builda-bar" Container Images
 
 on:
   create:
@@ -58,7 +58,7 @@ jobs:
           fi
           echo "Tag '$TAG' is valid."
           echo "GITHUB_REF_NAME=${TAG}" >> $GITHUB_ENV
-          
+
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
 
@@ -160,18 +160,16 @@ jobs:
           VERSION="${{ matrix.alpine_variant.version }}"
           BUILD_VERSION="${{ steps.version.outputs.build_version }}"
           
-          # Sign all GHCR image tags
-          cosign sign --yes \
-            "${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME_GHCR }}:${VARIANT}-${ARCH}"
+          # Retrieve image digest and sign using digest
+          IMAGE_DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' "${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME_GHCR }}:${BUILD_VERSION}-${BASE_IMAGE}-${VERSION}-${VARIANT}-${ARCH}")
+          
+          if [ -z "$IMAGE_DIGEST" ]; then
+            echo "Error: Unable to retrieve image digest for signing."
+            exit 1
+          fi
 
-          cosign sign --yes \
-            "${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME_GHCR }}:${BASE_IMAGE}-${VARIANT}-${ARCH}"
-          
-          cosign sign --yes \
-            "${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME_GHCR }}:${BASE_IMAGE}-${VERSION}-${VARIANT}-${ARCH}"
-          
-          cosign sign --yes \
-            "${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME_GHCR }}:${BUILD_VERSION}-${BASE_IMAGE}-${VARIANT}-${ARCH}"
+          # Sign the image using its digest
+          cosign sign --yes "$IMAGE_DIGEST"
 
       - name: Sign images with Cosign - Harbor
         env:
@@ -182,19 +180,17 @@ jobs:
           VARIANT="${{ matrix.alpine_variant.name }}"
           VERSION="${{ matrix.alpine_variant.version }}"
           BUILD_VERSION="${{ steps.version.outputs.build_version }}"
-          
-          # Sign all Harbor image tags
-          cosign sign --yes \
-            "${{ env.REGISTRY_HARBOR }}/${{ env.IMAGE_NAME_HARBOR }}:${VARIANT}-${ARCH}"
 
-          cosign sign --yes \
-            "${{ env.REGISTRY_HARBOR }}/${{ env.IMAGE_NAME_HARBOR }}:${BASE_IMAGE}-${VARIANT}-${ARCH}"
+          # Retrieve image digest and sign using digest
+          IMAGE_DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' "${{ env.REGISTRY_HARBOR }}/${{ env.IMAGE_NAME_HARBOR }}:${BUILD_VERSION}-${BASE_IMAGE}-${VERSION}-${VARIANT}-${ARCH}")
           
-          cosign sign --yes \
-            "${{ env.REGISTRY_HARBOR }}/${{ env.IMAGE_NAME_HARBOR }}:${BASE_IMAGE}-${VERSION}-${VARIANT}-${ARCH}"
-          
-          cosign sign --yes \
-            "${{ env.REGISTRY_HARBOR }}/${{ env.IMAGE_NAME_HARBOR }}:${BUILD_VERSION}-${BASE_IMAGE}-${VARIANT}-${ARCH}"
+          if [ -z "$IMAGE_DIGEST" ]; then
+            echo "Error: Unable to retrieve image digest for signing."
+            exit 1
+          fi
+
+          # Sign the image using its digest
+          cosign sign --yes "$IMAGE_DIGEST"
 
   scan:
     runs-on: ubuntu-latest
