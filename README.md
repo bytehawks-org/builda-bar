@@ -1,436 +1,446 @@
-# Image Signing and Verification
+# builda-bar
 
-This document provides comprehensive guidance on verifying the cryptographic signatures applied to builda-bar container images using Cosign.
+[![Build Status](https://github.com/bytehawks/bytehawks/actions/workflows/docker-build-x86_64.yml/badge.svg)](https://github.com/bytehawks/bytehawks/actions/workflows/docker-build-x86_64.yml)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+
+Alpine-based build container for ByteHawks – enabling transparent, auditable software supply chains for European digital sovereignty (x86_64/Arm64).
 
 ## Table of Contents
 
 - [Overview](#overview)
-- [Installation](#installation)
-- [Signature Verification](#signature-verification)
-- [Advanced Verification Scenarios](#advanced-verification-scenarios)
-- [Kubernetes Integration](#kubernetes-integration)
-- [Troubleshooting](#troubleshooting)
+- [Quick Start](#quick-start)
+- [Image Variants](#image-variants)
+- [Pulling Images](#pulling-images)
+- [Security Features](#security-features)
+- [Verification & Signing](#verification--signing)
+- [Contents & Tools](#contents--tools)
+- [Build Information](#build-information)
+- [Contributing](#contributing)
 
 ## Overview
 
-All released builda-bar images are signed using **Cosign**, the container signing and verification tool from the Sigstore project. Cosign provides:
+**builda-bar** is a minimal Alpine Linux-based container designed for ByteHawks build orchestration and NIS2-compliant software supply chain management. It provides a transparent, auditable foundation for building statically compiled software with integrated security scanning and Software Bill of Materials (SBOM) generation.
 
-### Benefits of Image Signing
+### Key Characteristics
 
-- **Authenticity**: Cryptographically prove images originate from ByteHawks official builds
-- **Integrity**: Detect any unauthorized modifications to signed images
-- **Non-Repudiation**: Establish chain of custody for container supply chain
-- **Transparency**: Leverage OIDC tokens for keyless signing via GitHub Actions
-- **Compliance**: Meet supply chain security requirements (SLSA, NIS2)
+- **Minimal Attack Surface**: Based on Alpine Linux, reducing dependencies and vulnerabilities
+- **Multi-Variant Support**: Available in `old-legacy`, `legacy`, `stable`, and `stream` Alpine versions
+- **Security-First**: Automated vulnerability scanning with Trivy and Grype
+- **Supply Chain Transparency**: CycloneDX SBOM generation for every build
+- **Cryptographically Signed**: Cosign signatures for image verification and authenticity
+- **Multi-Platform Ready**: x86_64 support with Arm64 coming soon
+- **European Digital Sovereignty**: Aligned with NIS2 compliance requirements
 
-### Signing Approach
+## Quick Start
 
-builda-bar uses **keyless signing** via Sigstore's OIDC provider:
+### Pull the Latest Stable Image
 
-- Images are signed during GitHub Actions workflow execution
-- No static keys stored in repository secrets
-- OIDC token proves GitHub identity and workflow context
-- Certificate includes:
-  - GitHub repository identity
-  - Git commit SHA
-  - Workflow run ID
-  - Timestamp
-
-## Installation
-
-### Install Cosign
-
-Choose your preferred method:
-
-#### macOS with Homebrew
-
+From GitHub Container Registry (GHCR):
 ```bash
-brew install cosign
+docker pull ghcr.io/bytehawks/bytehawks/builda-bar:stable-x86_64
 ```
 
-#### Linux from Release
+From ByteHawks Harbor Registry:
+```bash
+docker pull registry.bytehawks.org/cicd-images/builda-bar:stable-x86_64
+```
+
+### Run the Container
 
 ```bash
-wget https://github.com/sigstore/cosign/releases/download/v2.2.0/cosign-linux-amd64
+docker run --rm -it ghcr.io/bytehawks/bytehawks/builda-bar:stable-x86_64
+```
+
+Or with mounted volumes for builds:
+```bash
+docker run --rm -v $(pwd)/src:/build/src:ro -v $(pwd)/dist:/build/dist ghcr.io/bytehawks/bytehawks/builda-bar:stable-x86_64
+```
+
+## Image Variants
+
+### Alpine Versions
+
+builda-bar is built across multiple Alpine Linux versions to support diverse use cases and stability requirements:
+
+| Variant | Alpine Version | Use Case | Status |
+|---------|----------------|----------|--------|
+| `old-legacy` | 3.15.11 | Long-term stability, legacy systems | Supported |
+| `legacy` | 3.20.8 | Extended LTS, conservative deployments | Supported |
+| `stable` | 3.21.5 | Recommended default, balanced approach | **Recommended** |
+| `stream` | 3.22.2 | Cutting-edge features, latest packages | Latest |
+
+### Platform Support
+
+| Platform | Status | Tag Suffix |
+|----------|--------|-----------|
+| x86_64 | ✅ Supported | `-x86_64` |
+| Arm64 | 🚧 Coming Soon | `-arm64` |
+
+## Pulling Images
+
+### From GitHub Container Registry (GHCR)
+
+GHCR is the primary public registry for builda-bar images.
+
+#### Latest Stable (Recommended)
+```bash
+docker pull ghcr.io/bytehawks/bytehawks/builda-bar:stable-x86_64
+```
+
+#### By Alpine Variant
+```bash
+# Legacy LTS
+docker pull ghcr.io/bytehawks/bytehawks/builda-bar:legacy-x86_64
+
+# Old Legacy (long-term support)
+docker pull ghcr.io/bytehawks/bytehawks/builda-bar:old-legacy-x86_64
+
+# Stream (latest features)
+docker pull ghcr.io/bytehawks/bytehawks/builda-bar:stream-x86_64
+```
+
+#### By Full Version and Alpine Release
+```bash
+docker pull ghcr.io/bytehawks/bytehawks/builda-bar:alpine-3.21.5-stable-x86_64
+```
+
+#### By Release Version
+```bash
+docker pull ghcr.io/bytehawks/bytehawks/builda-bar:v1.0.0-20250101-alpine-stable-x86_64
+```
+
+#### By Digest (Immutable Reference)
+```bash
+docker pull ghcr.io/bytehawks/bytehawks/builda-bar@sha256:abc123def456...
+```
+
+### From ByteHawks Harbor Registry
+
+Harbor registry provides additional isolation and enterprise-grade features for European deployments.
+
+#### Latest Stable
+```bash
+docker pull registry.bytehawks.org/cicd-images/builda-bar:stable-x86_64
+```
+
+#### By Alpine Variant
+```bash
+docker pull registry.bytehawks.org/cicd-images/builda-bar:legacy-x86_64
+docker pull registry.bytehawks.org/cicd-images/builda-bar:old-legacy-x86_64
+docker pull registry.bytehawks.org/cicd-images/builda-bar:stream-x86_64
+```
+
+#### By Full Version
+```bash
+docker pull registry.bytehawks.org/cicd-images/builda-bar:alpine-3.21.5-stable-x86_64
+docker pull registry.bytehawks.org/cicd-images/builda-bar:v1.0.0-20250101-alpine-stable-x86_64
+```
+
+#### By Digest (Immutable Reference)
+```bash
+docker pull registry.bytehawks.org/cicd-images/builda-bar@sha256:abc123def456...
+```
+
+### Authentication
+
+#### GHCR (GitHub Container Registry)
+```bash
+# Public access (no authentication required)
+docker pull ghcr.io/bytehawks/bytehawks/builda-bar:stable-x86_64
+
+# With authentication (optional, for higher rate limits)
+echo $GITHUB_TOKEN | docker login ghcr.io -u USERNAME --password-stdin
+```
+
+#### Harbor Registry
+```bash
+docker login registry.bytehawks.org
+# Provide your Harbor credentials when prompted
+```
+
+## Security Features
+
+### Automated Vulnerability Scanning
+
+Every build is scanned with industry-leading security tools:
+
+#### Trivy Scanning
+[Trivy](https://github.com/aquasecurity/trivy) performs comprehensive vulnerability assessment scanning for known CVEs across all packages in the container image. Results are uploaded to GitHub Security tab as SARIF reports.
+
+**What Trivy checks:**
+- OS package vulnerabilities
+- Application dependencies
+- Configuration issues
+- Known malware signatures
+
+#### Grype Scanning
+[Grype](https://github.com/anchore/grype) provides dependency vulnerability detection with support for multiple package ecosystems.
+
+**What Grype checks:**
+- Application-level dependencies
+- Cross-package vulnerability correlations
+- Provides alternative CVE database sources
+
+### SBOM (Software Bill of Materials)
+
+A CycloneDX-formatted SBOM is generated for every build, providing complete transparency of container contents:
+
+```
+sbom-stable-x86_64.json
+sbom-legacy-x86_64.json
+sbom-old-legacy-x86_64.json
+sbom-stream-x86_64.json
+```
+
+SBOMs are available as build artifacts and include:
+- All Alpine packages and versions
+- Package checksums and origins
+- Dependency relationships
+- License information
+
+### Scan Result Retrieval
+
+#### From GitHub Actions
+
+1. Navigate to the [ByteHawks repository Actions tab](https://github.com/bytehawks/bytehawks/actions)
+2. Select the latest "Build builda-bar Container Images" workflow run
+3. Scroll to "Artifacts" section
+4. Download desired SBOM or scan reports:
+   - `sbom-{variant}-{arch}.json` – CycloneDX Software Bill of Materials
+   - `scan-{variant}-{arch}` – Trivy vulnerability reports
+
+#### Accessing Security Findings
+
+1. Go to repository **Security** tab → **Code scanning alerts**
+2. Results are organized by:
+   - Tool (Trivy or Grype)
+   - Variant and architecture
+   - Severity (CRITICAL, HIGH)
+
+#### Local SBOM Inspection
+
+```bash
+# Extract SBOM from workflow artifacts
+unzip sbom-stable-x86_64.json
+
+# View with a standard JSON tool
+cat sbom-stable-x86_64.json | jq .
+
+# Parse for specific packages
+cat sbom-stable-x86_64.json | jq '.components[] | select(.name | contains("openssl"))'
+```
+
+## Verification & Signing
+
+### Cosign Image Signing
+
+All released images are signed with Cosign using ByteHawks project keys, ensuring:
+- **Image Authenticity**: Verify images haven't been tampered with
+- **Provenance Tracking**: Confirm images originate from official builds
+- **Supply Chain Security**: Enforce signed images in Kubernetes policies
+
+### Verifying Image Signatures
+
+#### Prerequisites
+
+Install Cosign:
+```bash
+# macOS
+brew install cosign
+
+# Linux
+wget https://github.com/sigstore/cosign/releases/latest/download/cosign-linux-amd64
 chmod +x cosign-linux-amd64
 sudo mv cosign-linux-amd64 /usr/local/bin/cosign
-cosign version
+
+# Docker
+docker run ghcr.io/sigstore/cosign:latest version
 ```
 
-#### Linux via Package Manager
+#### Verify GHCR Image
 
 ```bash
-# Alpine
-apk add cosign
-
-# Ubuntu/Debian
-sudo apt-get install cosign
-
-# Fedora
-sudo dnf install cosign
-```
-
-#### Docker Image
-
-```bash
-docker run ghcr.io/sigstore/cosign:v2.2.0 version
-```
-
-#### Verify Installation
-
-```bash
-cosign version
-# Output: 
-# 2.2.0
-# gitlab.com/sigstore/cosign/cmd/cosign
-```
-
-## Signature Verification
-
-### Basic Verification
-
-Verify a single image tag signature:
-
-#### GHCR Image
-
-```bash
+# Verify signature
 cosign verify --certificate-identity-regexp="https://github.com/bytehawks/bytehawks" \
   ghcr.io/bytehawks/bytehawks/builda-bar:stable-x86_64
+
+# Verify and inspect attestation
+cosign verify-attestation ghcr.io/bytehawks/bytehawks/builda-bar:stable-x86_64
 ```
 
-Expected output shows certificate details:
-```
-Verification successful!
-Certificate subject: https://github.com/bytehawks/bytehawks/.github/workflows/docker-build-x86_64.yml@refs/tags/v1.0.0-20250101
-Certificate issuer URL: https://token.actions.githubusercontent.com
-```
-
-#### Harbor Image
+#### Verify Harbor Image
 
 ```bash
 cosign verify --certificate-identity-regexp="https://github.com/bytehawks/bytehawks" \
   registry.bytehawks.org/cicd-images/builda-bar:stable-x86_64
 ```
 
-### Verification by Digest
-
-Verify using immutable SHA256 digest for maximum reproducibility:
+#### Verify by Digest
 
 ```bash
 cosign verify --certificate-identity-regexp="https://github.com/bytehawks/bytehawks" \
   ghcr.io/bytehawks/bytehawks/builda-bar@sha256:bbdc920d45050a03710b3e4e814010602abc2ede0f111ce282481148a27de615
 ```
 
-**Advantages of digest-based verification:**
-- Digest is immutable and permanently refers to specific image version
-- Prevents tag reassignment attacks
-- Reproducible verification across time
+### Kubernetes Admission Control
 
-### Retrieve Image Digest
+Enforce signature verification in Kubernetes using Kyverno or OPA:
 
-To find the digest of a pulled image:
-
-```bash
-# Pull image and get digest
-docker pull ghcr.io/bytehawks/bytehawks/builda-bar:stable-x86_64
-
-# Get digest of pulled image
-docker inspect ghcr.io/bytehawks/bytehawks/builda-bar:stable-x86_64 | jq -r '.[0].RepoDigests[]'
-
-# Output:
-# ghcr.io/bytehawks/bytehawks/builda-bar@sha256:abc123def456...
-```
-
-## Advanced Verification Scenarios
-
-### Verify Multiple Variants at Once
-
-```bash
-for variant in old-legacy legacy stable stream; do
-  echo "Verifying ${variant}..."
-  cosign verify --certificate-identity-regexp="https://github.com/bytehawks/bytehawks" \
-    ghcr.io/bytehawks/bytehawks/builda-bar:${variant}-x86_64
-done
-```
-
-### Extract and Inspect Certificate
-
-View the certificate embedded in the signature:
-
-```bash
-cosign verify --certificate-identity-regexp="https://github.com/bytehawks/bytehawks" \
-  ghcr.io/bytehawks/bytehawks/builda-bar:stable-x86_64 2>&1 | grep -A 20 "Certificate"
-```
-
-Or save certificate for inspection:
-
-```bash
-cosign verify --certificate-identity-regexp="https://github.com/bytehawks/bytehawks" \
-  ghcr.io/bytehawks/bytehawks/builda-bar:stable-x86_64 \
-  --certificate-oidc-issuer-regexp="https://token.actions.githubusercontent.com" > cert.txt
-```
-
-### Verify with Full Certificate Chain
-
-Include OIDC issuer verification:
-
-```bash
-cosign verify \
-  --certificate-identity-regexp="https://github.com/bytehawks/bytehawks/.github/workflows/docker-build-x86_64.yml@refs/tags/*" \
-  --certificate-oidc-issuer-regexp="https://token.actions.githubusercontent.com" \
-  ghcr.io/bytehawks/bytehawks/builda-bar:stable-x86_64
-```
-
-### Verify for Specific Release
-
-Verify only images from a specific release tag:
-
-```bash
-cosign verify \
-  --certificate-identity-regexp="https://github.com/bytehawks/bytehawks/.github/workflows/docker-build-x86_64.yml@refs/tags/v1.0.0-20250101" \
-  ghcr.io/bytehawks/bytehawks/builda-bar:v1.0.0-20250101-alpine-stable-x86_64
-```
-
-## Kubernetes Integration
-
-### Enforce Signature Verification with Kyverno
-
-Install Kyverno and apply image signature verification policy:
-
-#### 1. Install Kyverno
-
-```bash
-helm repo add kyverno https://kyverno.github.io/kyverno/
-helm repo update
-helm install kyverno kyverno/kyverno \
-  --namespace kyverno \
-  --create-namespace \
-  --values kyverno-values.yaml
-```
-
-#### 2. Create Cluster Policy
-
+#### Kyverno Policy Example
 ```yaml
 apiVersion: kyverno.io/v1
 kind: ClusterPolicy
 metadata:
   name: verify-bytehawks-images
-  namespace: kyverno
 spec:
   validationFailureAction: enforce
-  background: true
-  webhookTimeoutSeconds: 30
   rules:
   - name: verify-cosign-signature
     match:
       resources:
         kinds:
         - Pod
-        - Deployment
-        - StatefulSet
-        - DaemonSet
-        - Job
-        - CronJob
     verifyImages:
     - imageReferences:
-      - "ghcr.io/bytehawks/bytehawks/builda-bar:*"
-      - "registry.bytehawks.org/cicd-images/builda-bar:*"
+      - "ghcr.io/bytehawks/bytehawks/*"
+      - "registry.bytehawks.org/cicd-images/*"
       attestors:
       - count: 1
         entries:
         - keys:
             signatureAlgorithm: sha256
-            # Public key from Cosign certificate (OIDC-based in this case)
             publicKeys: |
               -----BEGIN PUBLIC KEY-----
-              [ByteHawks Cosign public key - obtained from certificate]
+              [ByteHawks public key here]
               -----END PUBLIC KEY-----
             signatureFormat: cosign
-      messageOnVerificationFailure: "Image signature verification failed for {{ image }}"
 ```
 
-#### 3. Test Policy Enforcement
+## Contents & Tools
 
-Create a test Pod:
+builda-bar includes a curated selection of tools for build orchestration and system configuration:
 
-```yaml
-apiVersion: v1
-kind: Pod
-metadata:
-  name: test-builda-bar
-  namespace: default
-spec:
-  containers:
-  - name: builder
-    image: ghcr.io/bytehawks/bytehawks/builda-bar:stable-x86_64
-    command: ["sleep", "3600"]
-```
+### System Tools
+- `bash` – Advanced shell scripting
+- `coreutils` – Core POSIX utilities
+- `findutils` – File searching and processing
+- `grep` – Text pattern matching
+- `sed` – Stream editing and transformation
 
-Apply and observe:
+### Build & Compilation
+- `gcc` – GNU C Compiler (native code compilation)
+- `make` – Build automation
+- `cmake` – Cross-platform build configuration
+- `linux-headers` – Kernel header files for system-level compilation
+- `musl-dev` – musl C library development headers
+
+### Scripting & Automation
+- `python3` – Python 3 runtime
+- `py3-pip` – Python package manager
+- `ansible` – Infrastructure automation and configuration management
+- `perl` – Text processing and scripting
+- `git` – Version control system
+- `git-perl` – Perl modules for Git operations
+
+### Network & Transfer
+- `curl` – URL data transfer (HTTP/HTTPS/FTP)
+- `wget` – HTTP/FTP file download utility
+
+### System Configuration
+- `ca-certificates` – Root CA certificates for HTTPS verification
+
+### Environment Variables
+
+Container-set variables for build context:
 
 ```bash
-kubectl apply -f test-pod.yaml
-# If signature is valid: Pod created successfully
-# If signature is invalid: Pod creation blocked by Kyverno
+ALPINE_VERSION=3.21.5          # Alpine release version
+VARIANT_NAME=stable             # Variant name (stable, legacy, etc.)
+BUILD_CONTAINER=builda-bar      # Container identifier
+PYTHONUNBUFFERED=1              # Real-time Python output
 ```
 
-### Enforce Signature Verification with OPA/Gatekeeper
+## Build Information
 
-Alternative policy enforcement using OPA:
+### Image Metadata
 
-```rego
-package bytehawks_image_verification
-
-deny[msg] {
-  input.request.kind.kind in ["Pod", "Deployment", "StatefulSet"]
-  container := input.request.object.spec.containers[_]
-  image := container.image
-  
-  startswith(image, "ghcr.io/bytehawks/bytehawks/builda-bar") || 
-  startswith(image, "registry.bytehawks.org/cicd-images/builda-bar")
-  
-  not image_is_signed(image)
-  
-  msg := sprintf("Image %v is not signed with valid Cosign signature", [image])
-}
-
-image_is_signed(image) {
-  # Implement signature verification logic
-  # This would typically call cosign verify in an external service
-  true
-}
-```
-
-## Troubleshooting
-
-### Verification Fails: "No signatures found"
-
-**Issue**: Cosign cannot find signatures for the image
-
-**Solutions**:
-
-1. Verify image exists and is accessible:
-   ```bash
-   docker pull ghcr.io/bytehawks/bytehawks/builda-bar:stable-x86_64
-   ```
-
-2. Check image has been recently released (newly pushed images may have signing delay):
-   ```bash
-   # Wait a few minutes and retry
-   ```
-
-3. Verify the registry has Cosign image annotations enabled:
-   ```bash
-   docker inspect ghcr.io/bytehawks/bytehawks/builda-bar:stable-x86_64 | jq '.[] | .RepoTags'
-   ```
-
-### Verification Fails: "Certificate identity mismatch"
-
-**Issue**: Certificate subject doesn't match the regex pattern
-
-**Solutions**:
-
-1. Verify the exact repository path:
-   ```bash
-   # Correct
-   ghcr.io/bytehawks/bytehawks/builda-bar
-   
-   # Incorrect (missing "bytehawks")
-   ghcr.io/bytehawks/builda-bar
-   ```
-
-2. Use more permissive regex if needed:
-   ```bash
-   cosign verify --certificate-identity-regexp="bytehawks" \
-     ghcr.io/bytehawks/bytehawks/builda-bar:stable-x86_64
-   ```
-
-### Verification Fails: "Invalid OIDC token"
-
-**Issue**: OIDC token validation failed
-
-**Solutions**:
-
-1. Verify system time is synchronized (OIDC tokens are time-sensitive):
-   ```bash
-   date
-   ntpdate -u ntp.ubuntu.com  # Ubuntu
-   ```
-
-2. Ensure Cosign is updated:
-   ```bash
-   cosign version
-   # Update if needed
-   brew upgrade cosign  # macOS
-   ```
-
-### Cannot Connect to Registry
-
-**Issue**: "Error: GET https://registry.bytehawks.org/.../manifests/sha256:..."
-
-**Solutions**:
-
-1. Verify network connectivity:
-   ```bash
-   curl -I https://registry.bytehawks.org
-   ```
-
-2. Authenticate to Harbor if required:
-   ```bash
-   docker login registry.bytehawks.org
-   cosign verify ... registry.bytehawks.org/...
-   ```
-
-3. Check authentication credentials for GHCR:
-   ```bash
-   docker login ghcr.io
-   ```
-
-### Cosign Permission Denied
-
-**Issue**: "Permission denied" when running cosign
-
-**Solution**:
+Each image includes comprehensive OpenContainer Initiative (OCI) metadata:
 
 ```bash
-# Ensure cosign binary has execute permissions
-chmod +x /usr/local/bin/cosign
-
-# Or reinstall via package manager
-sudo apt-get install --reinstall cosign
+# Inspect metadata
+docker inspect ghcr.io/bytehawks/bytehawks/builda-bar:stable-x86_64 | jq '.[0].Config.Labels'
 ```
 
-## Security Best Practices
+### Available Labels
 
-### Recommended Verification Workflow
+- `org.opencontainers.image.title` – "builda-bar"
+- `org.opencontainers.image.description` – Full description with variant and version
+- `org.opencontainers.image.source` – GitHub repository URL
+- `org.opencontainers.image.documentation` – Wiki URL
+- `org.opencontainers.image.vendor` – "ByteHawks"
+- `org.opencontainers.image.licenses` – "Apache-2.0"
+- `org.opencontainers.image.created` – Build timestamp
+- `org.opencontainers.image.revision` – Git commit SHA
+- `org.opencontainers.image.version` – Release version
+- `alpine.variant` – Alpine variant name
+- `alpine.version` – Alpine version number
 
-1. **Always verify digests** when consuming images in production:
-   ```bash
-   DIGEST=$(docker inspect ghcr.io/bytehawks/bytehawks/builda-bar:stable-x86_64 | jq -r '.[0].RepoDigests[0]')
-   cosign verify --certificate-identity-regexp="https://github.com/bytehawks" "$DIGEST"
-   ```
+### Release Tagging Convention
 
-2. **Automate verification** in CI/CD:
-   ```yaml
-   - name: Verify image signature
-     run: |
-       cosign verify --certificate-identity-regexp="https://github.com/bytehawks" \
-         ghcr.io/bytehawks/bytehawks/builda-bar:${TAG}
-   ```
+Releases follow semantic versioning with date-based identifiers:
 
-3. **Enforce in Kubernetes** using admission controllers (Kyverno/OPA)
+```
+v{MAJOR}.{MINOR}.{PATCH}-{YYYYMMDD}
 
-4. **Validate OIDC issuer** for maximum security:
-   ```bash
-   cosign verify \
-     --certificate-oidc-issuer-regexp="https://token.actions.githubusercontent.com" \
-     ghcr.io/bytehawks/bytehawks/builda-bar:stable-x86_64
-   ```
+Example: v1.0.0-20250101
+```
 
-## Additional Resources
+Each release generates images with tags:
 
-- [Cosign Documentation](https://docs.sigstore.dev/cosign/overview)
-- [Sigstore Project](https://www.sigstore.dev/)
-- [Kyverno Policy Examples](https://kyverno.io/policies/)
-- [SLSA Framework](https://slsa.dev/)
-- [NIS2 Compliance](https://digital-strategy.ec.europa.eu/en/policies/nis2-directive)
+```
+{variant}-{arch}
+alpine-{alpine-version}-{variant}-{arch}
+{release-version}-alpine-{variant}-{arch}
+```
+
+## Contributing
+
+### Local Building
+
+Build locally for testing:
+
+```bash
+# x86_64
+docker build --build-arg ALPINE_VERSION=3.21.5 \
+  --build-arg VARIANT_NAME=stable \
+  -t builda-bar:local-stable-x86_64 \
+  -f Dockerfile .
+
+# Run container
+docker run --rm -it builda-bar:local-stable-x86_64
+```
+
+### Manual Workflow Trigger
+
+Trigger builds manually with custom tags:
+
+1. Go to **Actions** → **Build builda-bar Container Images**
+2. Click **Run workflow** → **Run workflow**
+3. Enter optional `tag_override` (e.g., `v1.2.3-20250115`)
+4. Workflow creates images with specified version
+
+### Reporting Issues
+
+Found a vulnerability or issue? Please report through:
+
+- **Security issues**: Use GitHub Security Advisory feature
+- **General issues**: [GitHub Issues](https://github.com/bytehawks/bytehawks/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/bytehawks/bytehawks/discussions)
+
+## License
+
+builda-bar is licensed under the **Apache License 2.0**. See [LICENSE](./LICENSE) file for details.
+
+---
+
+**ByteHawks** – European Digital Sovereignty Through Transparent Software Supply Chains
