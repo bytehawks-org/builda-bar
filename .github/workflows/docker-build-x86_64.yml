@@ -81,8 +81,8 @@ jobs:
       - name: Generate tags
         id: tags
         run: |
-          ARCH=$(echo "${{ matrix.platform }}" | cut -d'/' -f2)
           BASE_IMAGE="${{ env.BUILD_IMAGE }}"
+          ARCH=$(echo "${{ matrix.platform }}" | cut -d'/' -f2)
           VARIANT="${{ matrix.alpine_variant.name }}"
           VERSION="${{ matrix.alpine_variant.version }}"
           BUILD_VERSION="${{ steps.version.outputs.build_version }}"
@@ -171,12 +171,14 @@ jobs:
       - name: Generate image reference
         id: image
         run: |
+          BASE_IMAGE="${{ env.BUILD_IMAGE }}"
           ARCH=$(echo "${{ matrix.platform }}" | cut -d'/' -f2)
           VARIANT="${{ matrix.alpine_variant.name }}"
           BUILD_VERSION="${{ needs.build.outputs.build-version }}"
-          
-          IMAGE_REF="${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME_GHCR }}:${BUILD_VERSION}-${VARIANT}-${ARCH}"
-          
+
+          IMAGE_REF="${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME_GHCR }}:${BUILD_VERSION}-${BASE_IMAGE}-${VARIANT}-${ARCH}"
+
+          echo "base_image=${BASE_IMAGE}" >> $GITHUB_OUTPUT
           echo "image_ref=${IMAGE_REF}" >> $GITHUB_OUTPUT
           echo "variant=${VARIANT}" >> $GITHUB_OUTPUT
           echo "arch=${ARCH}" >> $GITHUB_OUTPUT
