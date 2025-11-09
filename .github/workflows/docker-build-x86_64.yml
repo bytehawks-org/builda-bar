@@ -70,9 +70,9 @@ jobs:
           password: ${{ secrets.HARBOR_CICD_IAMGES_USER_PASSWORD }}
 
       - name: Install Cosign
-        uses: sigstore/cosign-installer@v4
+        uses: sigstore/cosign-installer@v4.0.0
         with:
-          cosign-release: 'v2.2.0'
+          cosign-release: 'v3.0.2'
 
       - name: Determine build version
         id: version
@@ -93,11 +93,11 @@ jobs:
           VERSION="${{ matrix.alpine_variant.version }}"
           BUILD_VERSION="${{ steps.version.outputs.build_version }}"
           
-          TAGS_GHCR="${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME_GHCR }}:${VARIANT}-${ARCH}"
+          TAGS_GHCR="${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME_GHCR }}:${BASE_IMAGE}-${VARIANT}-${ARCH}"
           TAGS_GHCR="${TAGS_GHCR},${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME_GHCR }}:${BASE_IMAGE}-${VERSION}-${VARIANT}-${ARCH}"
           TAGS_GHCR="${TAGS_GHCR},${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME_GHCR }}:${BUILD_VERSION}-${BASE_IMAGE}-${VARIANT}-${ARCH}"
           
-          TAGS_HARBOR="${{ env.REGISTRY_HARBOR }}/${{ env.IMAGE_NAME_HARBOR }}:${VARIANT}-${ARCH}"
+          TAGS_HARBOR="${{ env.REGISTRY_HARBOR }}/${{ env.IMAGE_NAME_HARBOR }}:${BASE_IMAGE}-${VARIANT}-${ARCH}"
           TAGS_HARBOR="${TAGS_HARBOR},${{ env.REGISTRY_HARBOR }}/${{ env.IMAGE_NAME_HARBOR }}:${BASE_IMAGE}-${VERSION}-${VARIANT}-${ARCH}"
           TAGS_HARBOR="${TAGS_HARBOR},${{ env.REGISTRY_HARBOR }}/${{ env.IMAGE_NAME_HARBOR }}:${BUILD_VERSION}-${BASE_IMAGE}-${VARIANT}-${ARCH}"
           
@@ -141,6 +141,7 @@ jobs:
         env:
           COSIGN_EXPERIMENTAL: 1
         run: |
+          BASE_IMAGE="${{ env.BUILD_IMAGE }}"
           ARCH=$(echo "${{ matrix.platform }}" | cut -d'/' -f2)
           VARIANT="${{ matrix.alpine_variant.name }}"
           VERSION="${{ matrix.alpine_variant.version }}"
@@ -148,18 +149,19 @@ jobs:
           
           # Sign all GHCR image tags
           cosign sign --yes \
-            "${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME_GHCR }}:${VARIANT}-${ARCH}"
+            "${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME_GHCR }}:${BASE_IMAGE}-${VARIANT}-${ARCH}"
           
           cosign sign --yes \
-            "${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME_GHCR }}:alpine-${VERSION}-${VARIANT}-${ARCH}"
+            "${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME_GHCR }}:${BASE_IMAGE}-${VERSION}-${VARIANT}-${ARCH}"
           
           cosign sign --yes \
-            "${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME_GHCR }}:${BUILD_VERSION}-alpine-${VARIANT}-${ARCH}"
+            "${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME_GHCR }}:${BUILD_VERSION}-${BASE_IMAGE}-${VARIANT}-${ARCH}"
 
       - name: Sign images with Cosign - Harbor
         env:
           COSIGN_EXPERIMENTAL: 1
         run: |
+          BASE_IMAGE="${{ env.BUILD_IMAGE }}"
           ARCH=$(echo "${{ matrix.platform }}" | cut -d'/' -f2)
           VARIANT="${{ matrix.alpine_variant.name }}"
           VERSION="${{ matrix.alpine_variant.version }}"
@@ -167,13 +169,13 @@ jobs:
           
           # Sign all Harbor image tags
           cosign sign --yes \
-            "${{ env.REGISTRY_HARBOR }}/${{ env.IMAGE_NAME_HARBOR }}:${VARIANT}-${ARCH}"
+            "${{ env.REGISTRY_HARBOR }}/${{ env.IMAGE_NAME_HARBOR }}:${BASE_IMAGE}-${VARIANT}-${ARCH}"
           
           cosign sign --yes \
-            "${{ env.REGISTRY_HARBOR }}/${{ env.IMAGE_NAME_HARBOR }}:alpine-${VERSION}-${VARIANT}-${ARCH}"
+            "${{ env.REGISTRY_HARBOR }}/${{ env.IMAGE_NAME_HARBOR }}:${BASE_IMAGE}-${VERSION}-${VARIANT}-${ARCH}"
           
           cosign sign --yes \
-            "${{ env.REGISTRY_HARBOR }}/${{ env.IMAGE_NAME_HARBOR }}:${BUILD_VERSION}-alpine-${VARIANT}-${ARCH}"
+            "${{ env.REGISTRY_HARBOR }}/${{ env.IMAGE_NAME_HARBOR }}:${BUILD_VERSION}-${BASE_IMAGE}-${VARIANT}-${ARCH}"
 
   scan:
     runs-on: ubuntu-latest
