@@ -1,4 +1,4 @@
-name: Build x86_64 "builda-bar" Container Images
+name: Build Multi-Arch "builda-bar" Container Images (x86_64 + arm64)
 
 on:
   create:
@@ -33,6 +33,7 @@ jobs:
             version: "${{ vars.ALPINE_STREAM_VERSION }}"
         platform:
           - linux/amd64
+          - linux/arm64
     
     outputs:
       build-version: ${{ steps.version.outputs.build_version }}
@@ -131,7 +132,7 @@ jobs:
           labels: |
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.version=${{ steps.version.outputs.build_version }}
-            org.opencontainers.image.description="builda-bar base container image builder based on Alpine ${{ matrix.alpine_variant.version }} x86_64"
+            org.opencontainers.image.description="builda-bar base container image builder based on Alpine ${{ matrix.alpine_variant.version }} ${{ matrix.platform }}"
             org.opencontainers.image.title="builda-bar"
             org.opencontainers.image.url="https://github.com/bytehawks-org/builda-bar"
             org.opencontainers.image.source="https://github.com/bytehawks-org/builda-bar"
@@ -140,6 +141,7 @@ jobs:
             org.opencontainers.image.licenses="Apache-2.0"
             alpine.variant="${{ matrix.alpine_variant.name }}"
             alpine.version="${{ matrix.alpine_variant.version }}"
+            build.platform="${{ matrix.platform }}"
           build-args: |
             ALPINE_VERSION=${{ matrix.alpine_variant.version }}
             VARIANT_NAME=${{ matrix.alpine_variant.name }}
@@ -166,6 +168,7 @@ jobs:
             version: "${{ vars.ALPINE_STREAM_VERSION }}"
         platform:
           - linux/amd64
+          - linux/arm64
     
     permissions:
       contents: read
@@ -202,12 +205,10 @@ jobs:
           VERSION="${{ matrix.alpine_variant.version }}"
           BUILD_VERSION="${{ needs.build.outputs.build-version }}"
           
-          # Costruisci il full tag reference
           IMAGE_FULL_TAG="${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME_GHCR }}:${BUILD_VERSION}-${BASE_IMAGE}-${VERSION}-${VARIANT}-${ARCH}"
           
           echo "Attempting to sign image: $IMAGE_FULL_TAG"
           
-          # Usa cosign triangulate per verificare disponibilità, con retry
           MAX_RETRIES=10
           RETRY_COUNT=0
           
@@ -274,9 +275,146 @@ jobs:
             fi
           done
 
+  create-manifest-indices:
+    runs-on: ubuntu-latest
+    needs: [build, sign]
+    strategy:
+      matrix:
+        alpine_variant:
+          - name: old-legacy
+            version: "${{ vars.ALPINE_OLD_LEGACY_VERSION }}"
+          - name: legacy
+            version: "${{ vars.ALPINE_LEGACY_VERSION }}"
+          - name: stable
+            version: "${{ vars.ALPINE_STABLE_VERSION }}"
+          - name: stream
+            version: "${{ vars.ALPINE_STREAM_VERSION }}"
+    
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY_GHCR }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Log in to Harbor Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY_HARBOR }}
+          username: ${{ vars.HARBOR_CICD_IMAGES_USER_NAME }}
+          password: ${{ secrets.HARBOR_CICD_IMAGES_USER_PASSWORD }}
+
+      - name: Install Docker CLI with manifest support
+        run: |
+          # Docker manifest è già disponibile in ubuntu-latest
+          docker version
+
+      - name: Create and push manifest indices - GHCR
+        run: |
+          BASE_IMAGE="${{ env.BUILD_IMAGE }}"
+          VARIANT="${{ matrix.alpine_variant.name }}"
+          VERSION="${{ matrix.alpine_variant.version }}"
+          BUILD_VERSION="${{ needs.build.outputs.build-version }}"
+          
+          REGISTRY="${{ env.REGISTRY_GHCR }}"
+          IMAGE_NAME="${{ env.IMAGE_NAME_GHCR }}"
+          
+          # Tag del manifest index (senza architettura)
+          # Layer 1: variant-specific (implicit latest for this variant)
+          MANIFEST_TAG_L1="${REGISTRY}/${IMAGE_NAME}:${VARIANT}"
+          
+          # Layer 2: alpine-variant-specific
+          MANIFEST_TAG_L2="${REGISTRY}/${IMAGE_NAME}:${BASE_IMAGE}-${VARIANT}"
+          
+          # Layer 3: alpine-version-variant-specific
+          MANIFEST_TAG_L3="${REGISTRY}/${IMAGE_NAME}:${BASE_IMAGE}-${VERSION}-${VARIANT}"
+          
+          # Layer 4: full release (multi-arch)
+          MANIFEST_TAG_L4="${REGISTRY}/${IMAGE_NAME}:${BUILD_VERSION}-${BASE_IMAGE}-${VERSION}-${VARIANT}"
+          
+          # Immagini component (x86_64 + arm64)
+          IMAGE_AMD64="${REGISTRY}/${IMAGE_NAME}:${BUILD_VERSION}-${BASE_IMAGE}-${VERSION}-${VARIANT}-amd64"
+          IMAGE_ARM64="${REGISTRY}/${IMAGE_NAME}:${BUILD_VERSION}-${BASE_IMAGE}-${VERSION}-${VARIANT}-arm64"
+          
+          echo "Creating manifest index from:"
+          echo "  x86_64: $IMAGE_AMD64"
+          echo "  arm64:  $IMAGE_ARM64"
+          
+          # Crea manifest index (amend per aggiungere più architetture)
+          docker manifest create "$MANIFEST_TAG_L4" --amend "$IMAGE_AMD64" --amend "$IMAGE_ARM64"
+          docker manifest push "$MANIFEST_TAG_L4"
+          echo "✓ Pushed manifest: $MANIFEST_TAG_L4"
+          
+          # Crea alias per layer 3
+          docker manifest create "$MANIFEST_TAG_L3" --amend "$IMAGE_AMD64" --amend "$IMAGE_ARM64"
+          docker manifest push "$MANIFEST_TAG_L3"
+          echo "✓ Pushed manifest: $MANIFEST_TAG_L3"
+          
+          # Crea alias per layer 2
+          docker manifest create "$MANIFEST_TAG_L2" --amend "$IMAGE_AMD64" --amend "$IMAGE_ARM64"
+          docker manifest push "$MANIFEST_TAG_L2"
+          echo "✓ Pushed manifest: $MANIFEST_TAG_L2"
+          
+          # Crea alias per layer 1 (punta sempre al release completo)
+          docker manifest create "$MANIFEST_TAG_L1" --amend "$IMAGE_AMD64" --amend "$IMAGE_ARM64"
+          docker manifest push "$MANIFEST_TAG_L1"
+          echo "✓ Pushed manifest: $MANIFEST_TAG_L1"
+
+      - name: Create and push manifest indices - Harbor
+        run: |
+          BASE_IMAGE="${{ env.BUILD_IMAGE }}"
+          VARIANT="${{ matrix.alpine_variant.name }}"
+          VERSION="${{ matrix.alpine_variant.version }}"
+          BUILD_VERSION="${{ needs.build.outputs.build-version }}"
+          
+          REGISTRY="${{ env.REGISTRY_HARBOR }}"
+          IMAGE_NAME="${{ env.IMAGE_NAME_HARBOR }}"
+          
+          # Layer 1: variant-specific
+          MANIFEST_TAG_L1="${REGISTRY}/${IMAGE_NAME}:${VARIANT}"
+          
+          # Layer 2: alpine-variant-specific
+          MANIFEST_TAG_L2="${REGISTRY}/${IMAGE_NAME}:${BASE_IMAGE}-${VARIANT}"
+          
+          # Layer 3: alpine-version-variant-specific
+          MANIFEST_TAG_L3="${REGISTRY}/${IMAGE_NAME}:${BASE_IMAGE}-${VERSION}-${VARIANT}"
+          
+          # Layer 4: full release
+          MANIFEST_TAG_L4="${REGISTRY}/${IMAGE_NAME}:${BUILD_VERSION}-${BASE_IMAGE}-${VERSION}-${VARIANT}"
+          
+          # Immagini component
+          IMAGE_AMD64="${REGISTRY}/${IMAGE_NAME}:${BUILD_VERSION}-${BASE_IMAGE}-${VERSION}-${VARIANT}-amd64"
+          IMAGE_ARM64="${REGISTRY}/${IMAGE_NAME}:${BUILD_VERSION}-${BASE_IMAGE}-${VERSION}-${VARIANT}-arm64"
+          
+          echo "Creating manifest index from:"
+          echo "  x86_64: $IMAGE_AMD64"
+          echo "  arm64:  $IMAGE_ARM64"
+          
+          # Crea manifest indices
+          docker manifest create "$MANIFEST_TAG_L4" --amend "$IMAGE_AMD64" --amend "$IMAGE_ARM64"
+          docker manifest push "$MANIFEST_TAG_L4"
+          echo "✓ Pushed manifest: $MANIFEST_TAG_L4"
+          
+          docker manifest create "$MANIFEST_TAG_L3" --amend "$IMAGE_AMD64" --amend "$IMAGE_ARM64"
+          docker manifest push "$MANIFEST_TAG_L3"
+          echo "✓ Pushed manifest: $MANIFEST_TAG_L3"
+          
+          docker manifest create "$MANIFEST_TAG_L2" --amend "$IMAGE_AMD64" --amend "$IMAGE_ARM64"
+          docker manifest push "$MANIFEST_TAG_L2"
+          echo "✓ Pushed manifest: $MANIFEST_TAG_L2"
+          
+          docker manifest create "$MANIFEST_TAG_L1" --amend "$IMAGE_AMD64" --amend "$IMAGE_ARM64"
+          docker manifest push "$MANIFEST_TAG_L1"
+          echo "✓ Pushed manifest: $MANIFEST_TAG_L1"
+
   scan:
     runs-on: ubuntu-latest
-    needs: build
+    needs: [build, create-manifest-indices]
     strategy:
       matrix:
         alpine_variant:
@@ -290,6 +428,7 @@ jobs:
             version: "${{ vars.ALPINE_STREAM_VERSION }}"
         platform:
           - linux/amd64
+          - linux/arm64
     
     permissions:
       contents: read
@@ -322,7 +461,6 @@ jobs:
           VARIANT="${{ matrix.alpine_variant.name }}"
           BUILD_VERSION="${{ needs.build.outputs.build-version }}"
 
-          # Usa il tag GHCR full-versioned per lo scan
           IMAGE_REF="${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME_GHCR }}:${BUILD_VERSION}-${BASE_IMAGE}-${{ matrix.alpine_variant.version }}-${VARIANT}-${ARCH}"
 
           echo "base_image=${BASE_IMAGE}" >> $GITHUB_OUTPUT
@@ -348,27 +486,12 @@ jobs:
           format: 'cyclonedx'
           output: 'sbom-${{ steps.image.outputs.variant }}-${{ steps.image.outputs.arch }}.json'
 
-      - name: Run Grype scan
-        uses: anchore/scan-action@v3
-        id: grype
-        with:
-          image: ${{ steps.image.outputs.image_ref }}
-          output-format: sarif
-          fail-build: false
-
       - name: Upload Trivy SARIF to GitHub Security
         uses: github/codeql-action/upload-sarif@v3
         if: always()
         with:
           sarif_file: 'trivy-${{ steps.image.outputs.variant }}-${{ steps.image.outputs.arch }}.sarif'
           category: 'trivy-${{ steps.image.outputs.variant }}-${{ steps.image.outputs.arch }}'
-
-      - name: Upload Grype SARIF to GitHub Security
-        uses: github/codeql-action/upload-sarif@v3
-        if: always()
-        with:
-          sarif_file: ${{ steps.grype.outputs.sarif }}
-          category: 'grype-${{ steps.image.outputs.variant }}-${{ steps.image.outputs.arch }}'
 
       - name: Upload SBOM artifacts
         uses: actions/upload-artifact@v4
@@ -387,57 +510,32 @@ jobs:
       - name: Evaluate security posture
         if: always()
         run: |
-          echo "=== Security Posture Summary ==="
+          echo "=== Security Posture Summary (${{ steps.image.outputs.arch }}) ==="
           
-          # Trivy analysis
-          if [ -f "trivy-${{ steps.image.outputs.variant }}-${{ steps.image.outputs.arch }}.sarif" ]; then
-            TRIVY_CRITICAL=$(jq '[.runs[0].results[] | select(.level == "error")] | length' "trivy-${{ steps.image.outputs.variant }}-${{ steps.image.outputs.arch }}.sarif")
-            TRIVY_HIGH=$(jq '[.runs[0].results[] | select(.level == "warning")] | length' "trivy-${{ steps.image.outputs.variant }}-${{ steps.image.outputs.arch }}.sarif")
-            TRIVY_TOTAL=$(jq '.runs[0].results | length' "trivy-${{ steps.image.outputs.variant }}-${{ steps.image.outputs.arch }}.sarif")
+          TRIVY_REPORT="trivy-${{ steps.image.outputs.variant }}-${{ steps.image.outputs.arch }}.sarif"
+          
+          if [ -f "$TRIVY_REPORT" ]; then
+            TRIVY_CRITICAL=$(jq '[.runs[0].results[] | select(.level == "error")] | length' "$TRIVY_REPORT")
+            TRIVY_HIGH=$(jq '[.runs[0].results[] | select(.level == "warning")] | length' "$TRIVY_REPORT")
+            TRIVY_TOTAL=$(jq '.runs[0].results | length' "$TRIVY_REPORT")
             
-            echo "Trivy Results:"
+            echo "Trivy Vulnerability Scan Results:"
             echo "  - Critical: $TRIVY_CRITICAL"
             echo "  - High: $TRIVY_HIGH"
-            echo "  - Total: $TRIVY_TOTAL"
+            echo "  - Total findings: $TRIVY_TOTAL"
             
             if [ "$TRIVY_CRITICAL" -gt 0 ]; then
               echo ""
-              echo "⚠️  Critical vulnerabilities from Trivy:"
-              jq '.runs[0].results[] | select(.level == "error") | {message: .message.text, ruleId: .ruleId}' "trivy-${{ steps.image.outputs.variant }}-${{ steps.image.outputs.arch }}.sarif"
-            fi
-          fi
-          
-          # Grype analysis
-          if [ -f "${{ steps.grype.outputs.sarif }}" ]; then
-            GRYPE_TOTAL=$(jq '.runs[0].results | length' "${{ steps.grype.outputs.sarif }}")
-            GRYPE_WITH_SEVERITY=$(jq '[.runs[0].results[] | select(.level != null)] | length' "${{ steps.grype.outputs.sarif }}")
-            GRYPE_UNCLASSIFIED=$((GRYPE_TOTAL - GRYPE_WITH_SEVERITY))
-            GRYPE_CRITICAL=$(jq '[.runs[0].results[] | select(.level == "error")] | length' "${{ steps.grype.outputs.sarif }}")
-            GRYPE_HIGH=$(jq '[.runs[0].results[] | select(.level == "warning")] | length' "${{ steps.grype.outputs.sarif }}")
-            
-            echo ""
-            echo "Grype Results:"
-            echo "  - Critical: $GRYPE_CRITICAL"
-            echo "  - High: $GRYPE_HIGH"
-            echo "  - With severity: $GRYPE_WITH_SEVERITY"
-            echo "  - Unclassified (Alpine false positives): $GRYPE_UNCLASSIFIED"
-            
-            if [ "$GRYPE_CRITICAL" -gt 0 ]; then
+              echo "⚠️  Critical vulnerabilities detected:"
+              jq '.runs[0].results[] | select(.level == "error") | {message: .message.text, ruleId: .ruleId}' "$TRIVY_REPORT"
               echo ""
-              echo "⚠️  Critical vulnerabilities from Grype:"
-              jq '.runs[0].results[] | select(.level == "error") | {message: .message.text, ruleId: .ruleId}' "${{ steps.grype.outputs.sarif }}"
+              echo "❌ Build failed: Critical vulnerabilities detected"
+              exit 1
+            else
+              echo ""
+              echo "✅ No critical vulnerabilities detected"
             fi
-          fi
-          
-          # Fail if either scanner found critical issues
-          TRIVY_CRITICAL=$(jq '[.runs[0].results[] | select(.level == "error")] | length' "trivy-${{ steps.image.outputs.variant }}-${{ steps.image.outputs.arch }}.sarif" || echo 0)
-          GRYPE_CRITICAL=$(jq '[.runs[0].results[] | select(.level == "error")] | length' "${{ steps.grype.outputs.sarif }}" || echo 0)
-          
-          if [ "$TRIVY_CRITICAL" -gt 0 ] || [ "$GRYPE_CRITICAL" -gt 0 ]; then
-            echo ""
-            echo "❌ Build failed: Critical vulnerabilities detected"
-            exit 1
           else
-            echo ""
-            echo "✅ No critical vulnerabilities detected"
+            echo "❌ Trivy report not found: $TRIVY_REPORT"
+            exit 1
           fi

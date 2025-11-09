@@ -1,8 +1,7 @@
 # builda-bar
 
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
-[![Build x86_64 "builda-bar" Container Images](https://github.com/bytehawks-org/builda-bar/actions/workflows/docker-build-x86_64.yml/badge.svg)](https://github.com/bytehawks-org/builda-bar/actions/workflows/docker-build-x86_64.yml)
-[![Build arm64 "builda-bar" Container Images](https://github.com/bytehawks-org/builda-bar/actions/workflows/docker-build-arm64.yml/badge.svg)](https://github.com/bytehawks-org/builda-bar/actions/workflows/docker-build-arm64.yml)
+[![Build Multi-Arch "builda-bar" Container Images (x86_64 + arm64)](https://github.com/bytehawks-org/builda-bar/actions/workflows/docker-build-image.yml/badge.svg)](https://github.com/bytehawks-org/builda-bar/actions/workflows/docker-build-image.yml)
 
 
 Alpine-based build container for ByteHawks – enabling transparent, auditable software supply chains for European digital sovereignty (x86_64/Arm64).
