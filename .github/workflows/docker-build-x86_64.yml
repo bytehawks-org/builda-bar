@@ -43,6 +43,7 @@ jobs:
     permissions:
       contents: read
       packages: write
+      id-token: write
 
     steps:
       - name: Checkout repository
@@ -67,6 +68,11 @@ jobs:
           registry: ${{ env.REGISTRY_HARBOR }}
           username: ${{ vars.HARBOR_CICD_IAMGES_USER_NAME }}
           password: ${{ secrets.HARBOR_CICD_IAMGES_USER_PASSWORD }}
+
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@v4
+        with:
+          cosign-release: 'v2.2.0'
 
       - name: Determine build version
         id: version
@@ -98,6 +104,8 @@ jobs:
           ALL_TAGS="${TAGS_GHCR},${TAGS_HARBOR}"
           
           echo "all_tags=${ALL_TAGS}" >> $GITHUB_OUTPUT
+          echo "tags_ghcr=${TAGS_GHCR}" >> $GITHUB_OUTPUT
+          echo "tags_harbor=${TAGS_HARBOR}" >> $GITHUB_OUTPUT
 
       - name: Extract metadata
         id: meta
@@ -129,16 +137,56 @@ jobs:
           cache-to: type=gha,mode=max
           outputs: type=oci
 
+      - name: Sign images with Cosign - GHCR
+        env:
+          COSIGN_EXPERIMENTAL: 1
+        run: |
+          ARCH=$(echo "${{ matrix.platform }}" | cut -d'/' -f2)
+          VARIANT="${{ matrix.alpine_variant.name }}"
+          VERSION="${{ matrix.alpine_variant.version }}"
+          BUILD_VERSION="${{ steps.version.outputs.build_version }}"
+          
+          # Sign all GHCR image tags
+          cosign sign --yes \
+            "${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME_GHCR }}:${VARIANT}-${ARCH}"
+          
+          cosign sign --yes \
+            "${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME_GHCR }}:alpine-${VERSION}-${VARIANT}-${ARCH}"
+          
+          cosign sign --yes \
+            "${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME_GHCR }}:${BUILD_VERSION}-alpine-${VARIANT}-${ARCH}"
+
+      - name: Sign images with Cosign - Harbor
+        env:
+          COSIGN_EXPERIMENTAL: 1
+        run: |
+          ARCH=$(echo "${{ matrix.platform }}" | cut -d'/' -f2)
+          VARIANT="${{ matrix.alpine_variant.name }}"
+          VERSION="${{ matrix.alpine_variant.version }}"
+          BUILD_VERSION="${{ steps.version.outputs.build_version }}"
+          
+          # Sign all Harbor image tags
+          cosign sign --yes \
+            "${{ env.REGISTRY_HARBOR }}/${{ env.IMAGE_NAME_HARBOR }}:${VARIANT}-${ARCH}"
+          
+          cosign sign --yes \
+            "${{ env.REGISTRY_HARBOR }}/${{ env.IMAGE_NAME_HARBOR }}:alpine-${VERSION}-${VARIANT}-${ARCH}"
+          
+          cosign sign --yes \
+            "${{ env.REGISTRY_HARBOR }}/${{ env.IMAGE_NAME_HARBOR }}:${BUILD_VERSION}-alpine-${VARIANT}-${ARCH}"
+
   scan:
     runs-on: ubuntu-latest
     needs: build
     strategy:
       matrix:
         alpine_variant:
-          - name: legacy
+          - name: old-legacy
             version: "3.15.11"
-          - name: stable
+          - name: legacy
             version: "3.20.8"
+          - name: stable
+            version: "3.21.5"
           - name: stream
             version: "3.22.2"
         platform:
@@ -251,7 +299,17 @@ jobs:
       - name: Display Grype Results
         if: always()
         run: |
-          echo "=== Grype Scan Results ==="
+          echo "=== Grype Scan Results (with severity info) ==="
           if [ -f ${{ steps.grype.outputs.sarif }} ]; then
-            cat ${{ steps.grype.outputs.sarif }} | jq '.runs[0].results[] | {message: .message.text, severity: .level}'
+            # Filter out entries with null severity (common Alpine false positives)
+            GRYPE_WITH_SEVERITY=$(cat ${{ steps.grype.outputs.sarif }} | jq '.runs[0].results[] | select(.level != null) | {message: .message.text, severity: .level}' | jq -s length)
+            GRYPE_TOTAL=$(cat ${{ steps.grype.outputs.sarif }} | jq '.runs[0].results | length')
+            GRYPE_UNCLASSIFIED=$((GRYPE_TOTAL - GRYPE_WITH_SEVERITY))
+            
+            echo "Total findings: $GRYPE_TOTAL"
+            echo "With severity classification: $GRYPE_WITH_SEVERITY"
+            echo "Unclassified (typically Alpine false positives): $GRYPE_UNCLASSIFIED"
+            echo ""
+            echo "Detailed findings with severity:"
+            cat ${{ steps.grype.outputs.sarif }} | jq '.runs[0].results[] | select(.level != null) | {message: .message.text, severity: .level}'
           fi
