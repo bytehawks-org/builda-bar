@@ -295,24 +295,20 @@ jobs:
       packages: write
 
     steps:
+      - name: Install regctl
+        run: |
+          # Scarica regctl per manipolare i manifest direttamente nel registry
+          VERSION="v0.7.0"
+          curl -L https://github.com/regclient/regclient/releases/download/${VERSION}/regctl-linux-amd64 \
+            -o /tmp/regctl && chmod +x /tmp/regctl
+          sudo mv /tmp/regctl /usr/local/bin/regctl
+          regctl version
+
       - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY_GHCR }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+        run: regctl login "${{ env.REGISTRY_GHCR }}" -u "${{ github.actor }}" -p "${{ secrets.GITHUB_TOKEN }}"
 
       - name: Log in to Harbor Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY_HARBOR }}
-          username: ${{ vars.HARBOR_CICD_IMAGES_USER_NAME }}
-          password: ${{ secrets.HARBOR_CICD_IMAGES_USER_PASSWORD }}
-
-      - name: Install Docker CLI with manifest support
-        run: |
-          # Docker manifest è già disponibile in ubuntu-latest
-          docker version
+        run: regctl login "${{ env.REGISTRY_HARBOR }}" -u "${{ vars.HARBOR_CICD_IMAGES_USER_NAME }}" -p "${{ secrets.HARBOR_CICD_IMAGES_USER_PASSWORD }}"
 
       - name: Create and push manifest indices - GHCR
         run: |
@@ -324,20 +320,7 @@ jobs:
           REGISTRY="${{ env.REGISTRY_GHCR }}"
           IMAGE_NAME="${{ env.IMAGE_NAME_GHCR }}"
           
-          # Tag del manifest index (senza architettura)
-          # Layer 1: variant-specific (implicit latest for this variant)
-          MANIFEST_TAG_L1="${REGISTRY}/${IMAGE_NAME}:${VARIANT}"
-          
-          # Layer 2: alpine-variant-specific
-          MANIFEST_TAG_L2="${REGISTRY}/${IMAGE_NAME}:${BASE_IMAGE}-${VARIANT}"
-          
-          # Layer 3: alpine-version-variant-specific
-          MANIFEST_TAG_L3="${REGISTRY}/${IMAGE_NAME}:${BASE_IMAGE}-${VERSION}-${VARIANT}"
-          
-          # Layer 4: full release (multi-arch)
-          MANIFEST_TAG_L4="${REGISTRY}/${IMAGE_NAME}:${BUILD_VERSION}-${BASE_IMAGE}-${VERSION}-${VARIANT}"
-          
-          # Immagini component (x86_64 + arm64)
+          # Immagini component con architettura specifica
           IMAGE_AMD64="${REGISTRY}/${IMAGE_NAME}:${BUILD_VERSION}-${BASE_IMAGE}-${VERSION}-${VARIANT}-amd64"
           IMAGE_ARM64="${REGISTRY}/${IMAGE_NAME}:${BUILD_VERSION}-${BASE_IMAGE}-${VERSION}-${VARIANT}-arm64"
           
@@ -345,24 +328,59 @@ jobs:
           echo "  x86_64: $IMAGE_AMD64"
           echo "  arm64:  $IMAGE_ARM64"
           
-          # Crea manifest index (amend per aggiungere più architetture)
-          docker manifest create "$MANIFEST_TAG_L4" --amend "$IMAGE_AMD64" --amend "$IMAGE_ARM64"
-          docker manifest push "$MANIFEST_TAG_L4"
+          # Recupera i digest delle immagini
+          DIGEST_AMD64=$(regctl image digest "$IMAGE_AMD64")
+          DIGEST_ARM64=$(regctl image digest "$IMAGE_ARM64")
+          
+          echo "Digests:"
+          echo "  AMD64: $DIGEST_AMD64"
+          echo "  ARM64: $DIGEST_ARM64"
+          
+          # Crea il manifest index JSON usando jq
+          MANIFEST_INDEX=$(jq -n \
+            --arg amd64_digest "$DIGEST_AMD64" \
+            --arg arm64_digest "$DIGEST_ARM64" \
+            '{
+              "schemaVersion": 2,
+              "mediaType": "application/vnd.docker.distribution.manifest.list.v2+json",
+              "manifests": [
+                {
+                  "mediaType": "application/vnd.docker.distribution.manifest.v2+json",
+                  "digest": $amd64_digest,
+                  "platform": {
+                    "architecture": "amd64",
+                    "os": "linux"
+                  }
+                },
+                {
+                  "mediaType": "application/vnd.docker.distribution.manifest.v2+json",
+                  "digest": $arm64_digest,
+                  "platform": {
+                    "architecture": "arm64",
+                    "os": "linux"
+                  }
+                }
+              ]
+            }')
+          
+          # Layer 4: full release (multi-arch)
+          MANIFEST_TAG_L4="${REGISTRY}/${IMAGE_NAME}:${BUILD_VERSION}-${BASE_IMAGE}-${VERSION}-${VARIANT}"
+          regctl manifest put "$MANIFEST_TAG_L4" <<<"$MANIFEST_INDEX"
           echo "✓ Pushed manifest: $MANIFEST_TAG_L4"
           
-          # Crea alias per layer 3
-          docker manifest create "$MANIFEST_TAG_L3" --amend "$IMAGE_AMD64" --amend "$IMAGE_ARM64"
-          docker manifest push "$MANIFEST_TAG_L3"
+          # Layer 3: alpine-version-variant-specific
+          MANIFEST_TAG_L3="${REGISTRY}/${IMAGE_NAME}:${BASE_IMAGE}-${VERSION}-${VARIANT}"
+          regctl manifest put "$MANIFEST_TAG_L3" <<<"$MANIFEST_INDEX"
           echo "✓ Pushed manifest: $MANIFEST_TAG_L3"
           
-          # Crea alias per layer 2
-          docker manifest create "$MANIFEST_TAG_L2" --amend "$IMAGE_AMD64" --amend "$IMAGE_ARM64"
-          docker manifest push "$MANIFEST_TAG_L2"
+          # Layer 2: alpine-variant-specific
+          MANIFEST_TAG_L2="${REGISTRY}/${IMAGE_NAME}:${BASE_IMAGE}-${VARIANT}"
+          regctl manifest put "$MANIFEST_TAG_L2" <<<"$MANIFEST_INDEX"
           echo "✓ Pushed manifest: $MANIFEST_TAG_L2"
           
-          # Crea alias per layer 1 (punta sempre al release completo)
-          docker manifest create "$MANIFEST_TAG_L1" --amend "$IMAGE_AMD64" --amend "$IMAGE_ARM64"
-          docker manifest push "$MANIFEST_TAG_L1"
+          # Layer 1: variant-specific
+          MANIFEST_TAG_L1="${REGISTRY}/${IMAGE_NAME}:${VARIANT}"
+          regctl manifest put "$MANIFEST_TAG_L1" <<<"$MANIFEST_INDEX"
           echo "✓ Pushed manifest: $MANIFEST_TAG_L1"
 
       - name: Create and push manifest indices - Harbor
@@ -375,18 +393,6 @@ jobs:
           REGISTRY="${{ env.REGISTRY_HARBOR }}"
           IMAGE_NAME="${{ env.IMAGE_NAME_HARBOR }}"
           
-          # Layer 1: variant-specific
-          MANIFEST_TAG_L1="${REGISTRY}/${IMAGE_NAME}:${VARIANT}"
-          
-          # Layer 2: alpine-variant-specific
-          MANIFEST_TAG_L2="${REGISTRY}/${IMAGE_NAME}:${BASE_IMAGE}-${VARIANT}"
-          
-          # Layer 3: alpine-version-variant-specific
-          MANIFEST_TAG_L3="${REGISTRY}/${IMAGE_NAME}:${BASE_IMAGE}-${VERSION}-${VARIANT}"
-          
-          # Layer 4: full release
-          MANIFEST_TAG_L4="${REGISTRY}/${IMAGE_NAME}:${BUILD_VERSION}-${BASE_IMAGE}-${VERSION}-${VARIANT}"
-          
           # Immagini component
           IMAGE_AMD64="${REGISTRY}/${IMAGE_NAME}:${BUILD_VERSION}-${BASE_IMAGE}-${VERSION}-${VARIANT}-amd64"
           IMAGE_ARM64="${REGISTRY}/${IMAGE_NAME}:${BUILD_VERSION}-${BASE_IMAGE}-${VERSION}-${VARIANT}-arm64"
@@ -395,21 +401,59 @@ jobs:
           echo "  x86_64: $IMAGE_AMD64"
           echo "  arm64:  $IMAGE_ARM64"
           
-          # Crea manifest indices
-          docker manifest create "$MANIFEST_TAG_L4" --amend "$IMAGE_AMD64" --amend "$IMAGE_ARM64"
-          docker manifest push "$MANIFEST_TAG_L4"
+          # Recupera i digest
+          DIGEST_AMD64=$(regctl image digest "$IMAGE_AMD64")
+          DIGEST_ARM64=$(regctl image digest "$IMAGE_ARM64")
+          
+          echo "Digests:"
+          echo "  AMD64: $DIGEST_AMD64"
+          echo "  ARM64: $DIGEST_ARM64"
+          
+          # Crea il manifest index JSON
+          MANIFEST_INDEX=$(jq -n \
+            --arg amd64_digest "$DIGEST_AMD64" \
+            --arg arm64_digest "$DIGEST_ARM64" \
+            '{
+              "schemaVersion": 2,
+              "mediaType": "application/vnd.docker.distribution.manifest.list.v2+json",
+              "manifests": [
+                {
+                  "mediaType": "application/vnd.docker.distribution.manifest.v2+json",
+                  "digest": $amd64_digest,
+                  "platform": {
+                    "architecture": "amd64",
+                    "os": "linux"
+                  }
+                },
+                {
+                  "mediaType": "application/vnd.docker.distribution.manifest.v2+json",
+                  "digest": $arm64_digest,
+                  "platform": {
+                    "architecture": "arm64",
+                    "os": "linux"
+                  }
+                }
+              ]
+            }')
+          
+          # Layer 4: full release
+          MANIFEST_TAG_L4="${REGISTRY}/${IMAGE_NAME}:${BUILD_VERSION}-${BASE_IMAGE}-${VERSION}-${VARIANT}"
+          regctl manifest put "$MANIFEST_TAG_L4" <<<"$MANIFEST_INDEX"
           echo "✓ Pushed manifest: $MANIFEST_TAG_L4"
           
-          docker manifest create "$MANIFEST_TAG_L3" --amend "$IMAGE_AMD64" --amend "$IMAGE_ARM64"
-          docker manifest push "$MANIFEST_TAG_L3"
+          # Layer 3: alpine-version-variant-specific
+          MANIFEST_TAG_L3="${REGISTRY}/${IMAGE_NAME}:${BASE_IMAGE}-${VERSION}-${VARIANT}"
+          regctl manifest put "$MANIFEST_TAG_L3" <<<"$MANIFEST_INDEX"
           echo "✓ Pushed manifest: $MANIFEST_TAG_L3"
           
-          docker manifest create "$MANIFEST_TAG_L2" --amend "$IMAGE_AMD64" --amend "$IMAGE_ARM64"
-          docker manifest push "$MANIFEST_TAG_L2"
+          # Layer 2: alpine-variant-specific
+          MANIFEST_TAG_L2="${REGISTRY}/${IMAGE_NAME}:${BASE_IMAGE}-${VARIANT}"
+          regctl manifest put "$MANIFEST_TAG_L2" <<<"$MANIFEST_INDEX"
           echo "✓ Pushed manifest: $MANIFEST_TAG_L2"
           
-          docker manifest create "$MANIFEST_TAG_L1" --amend "$IMAGE_AMD64" --amend "$IMAGE_ARM64"
-          docker manifest push "$MANIFEST_TAG_L1"
+          # Layer 1: variant-specific
+          MANIFEST_TAG_L1="${REGISTRY}/${IMAGE_NAME}:${VARIANT}"
+          regctl manifest put "$MANIFEST_TAG_L1" <<<"$MANIFEST_INDEX"
           echo "✓ Pushed manifest: $MANIFEST_TAG_L1"
 
   scan:
