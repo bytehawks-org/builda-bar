@@ -44,7 +44,7 @@ RUN apk update && apk add --no-cache \
     grep \
     sed
 
-RUN python3 -m pip install --no-cache-dir --upgrade pip setuptools wheel
+#RUN python3 -m pip install --no-cache-dir --upgrade pip setuptools wheel
 
 WORKDIR /build
 
