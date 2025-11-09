@@ -161,8 +161,8 @@ jobs:
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY_HARBOR }}
-          username: ${{ secrets.HARBOR_USERNAME }}
-          password: ${{ secrets.HARBOR_PASSWORD }}
+          username: ${{ vars.HARBOR_CICD_IAMGES_USER_NAME }}
+          password: ${{ secrets.HARBOR_CICD_IAMGES_USER_PASSWORD }}
 
       - name: Generate image reference
         id: image
