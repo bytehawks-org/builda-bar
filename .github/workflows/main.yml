@@ -216,14 +216,14 @@ jobs:
           category: 'grype-${{ steps.image.outputs.variant }}-${{ steps.image.outputs.arch }}'
 
       - name: Upload SBOM artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: sbom-artifacts
           path: sbom-*.json
           retention-days: 90
 
       - name: Upload Scan Reports
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: scan-reports
           path: trivy-*.sarif
