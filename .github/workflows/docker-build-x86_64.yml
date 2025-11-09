@@ -12,6 +12,7 @@ on:
         type: string
 
 env:
+  BUILD_IMAGE: alpine
   REGISTRY_GHCR: ghcr.io
   REGISTRY_HARBOR: registry.bytehawks.org
   IMAGE_NAME_GHCR: ${{ github.repository }}/builda-bar
@@ -23,10 +24,12 @@ jobs:
     strategy:
       matrix:
         alpine_variant:
-          - name: legacy
+          - name: old-legacy
             version: "3.15.11"
-          - name: stable
+          - name: legacy
             version: "3.20.8"
+          - name: stable
+            version: "3.21.5"
           - name: stream
             version: "3.22.2"
         platform:
@@ -79,17 +82,18 @@ jobs:
         id: tags
         run: |
           ARCH=$(echo "${{ matrix.platform }}" | cut -d'/' -f2)
+          BASE_IMAGE="${{ env.BUILD_IMAGE }}"
           VARIANT="${{ matrix.alpine_variant.name }}"
           VERSION="${{ matrix.alpine_variant.version }}"
           BUILD_VERSION="${{ steps.version.outputs.build_version }}"
           
           TAGS_GHCR="${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME_GHCR }}:${VARIANT}-${ARCH}"
-          TAGS_GHCR="${TAGS_GHCR},${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME_GHCR }}:${VERSION}-${VARIANT}-${ARCH}"
-          TAGS_GHCR="${TAGS_GHCR},${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME_GHCR }}:${BUILD_VERSION}-${VARIANT}-${ARCH}"
+          TAGS_GHCR="${TAGS_GHCR},${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME_GHCR }}:${BASE_IMAGE}-${VERSION}-${VARIANT}-${ARCH}"
+          TAGS_GHCR="${TAGS_GHCR},${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME_GHCR }}:${BUILD_VERSION}-${BASE_IMAGE}-${VARIANT}-${ARCH}"
           
           TAGS_HARBOR="${{ env.REGISTRY_HARBOR }}/${{ env.IMAGE_NAME_HARBOR }}:${VARIANT}-${ARCH}"
-          TAGS_HARBOR="${TAGS_HARBOR},${{ env.REGISTRY_HARBOR }}/${{ env.IMAGE_NAME_HARBOR }}:${VERSION}-${VARIANT}-${ARCH}"
-          TAGS_HARBOR="${TAGS_HARBOR},${{ env.REGISTRY_HARBOR }}/${{ env.IMAGE_NAME_HARBOR }}:${BUILD_VERSION}-${VARIANT}-${ARCH}"
+          TAGS_HARBOR="${TAGS_HARBOR},${{ env.REGISTRY_HARBOR }}/${{ env.IMAGE_NAME_HARBOR }}:${BASE_IMAGE}-${VERSION}-${VARIANT}-${ARCH}"
+          TAGS_HARBOR="${TAGS_HARBOR},${{ env.REGISTRY_HARBOR }}/${{ env.IMAGE_NAME_HARBOR }}:${BUILD_VERSION}-${BASE_IMAGE}-${VARIANT}-${ARCH}"
           
           ALL_TAGS="${TAGS_GHCR},${TAGS_HARBOR}"
           
@@ -177,6 +181,10 @@ jobs:
           echo "variant=${VARIANT}" >> $GITHUB_OUTPUT
           echo "arch=${ARCH}" >> $GITHUB_OUTPUT
 
+      - name: Inspect image metadata
+        run: |
+          docker inspect ${{ steps.image.outputs.image_ref }} | jq '.[] | {Architecture, Os, Config}'
+          
       - name: Run Trivy vulnerability scan
         uses: aquasecurity/trivy-action@master
         with:
@@ -185,6 +193,7 @@ jobs:
           output: 'trivy-${{ steps.image.outputs.variant }}-${{ steps.image.outputs.arch }}.sarif'
           severity: 'CRITICAL,HIGH'
           exit-code: '0'
+          version: 'v0.67.2'
 
       - name: Generate SBOM with Trivy
         uses: aquasecurity/trivy-action@master
@@ -228,3 +237,19 @@ jobs:
           name: scan-${{ steps.image.outputs.variant }}-${{ steps.image.outputs.arch }}
           path: trivy-*.sarif
           retention-days: 90
+
+      - name: Display Trivy Results
+        if: always()
+        run: |
+          echo "=== Trivy Scan Results ==="
+          if [ -f trivy-${{ steps.image.outputs.variant }}-${{ steps.image.outputs.arch }}.sarif ]; then
+            cat trivy-${{ steps.image.outputs.variant }}-${{ steps.image.outputs.arch }}.sarif | jq '.runs[0].results[] | {message: .message.text, severity: .level, ruleId: .ruleId}'
+          fi
+
+      - name: Display Grype Results
+        if: always()
+        run: |
+          echo "=== Grype Scan Results ==="
+          if [ -f ${{ steps.grype.outputs.sarif }} ]; then
+            cat ${{ steps.grype.outputs.sarif }} | jq '.runs[0].results[] | {message: .message.text, severity: .level}'
+          fi
