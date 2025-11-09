@@ -24,11 +24,11 @@ jobs:
       matrix:
         alpine_variant:
           - name: legacy
-            version: "3.15"
+            version: "3.15.11"
           - name: stable
-            version: "3.20"
+            version: "3.20.8"
           - name: stream
-            version: "3.22"
+            version: "3.22.2"
         platform:
           - linux/amd64
           - linux/arm64
@@ -109,8 +109,8 @@ jobs:
         id: build
         uses: docker/build-push-action@v5
         with:
-          context: ./container
-          file: ./container/Dockerfile
+          context: ./
+          file: ./Dockerfile
           platforms: ${{ matrix.platform }}
           push: true
           tags: ${{ steps.tags.outputs.all_tags }}
@@ -132,11 +132,11 @@ jobs:
       matrix:
         alpine_variant:
           - name: legacy
-            version: "3.15"
+            version: "3.15.11"
           - name: stable
-            version: "3.20"
+            version: "3.20.8"
           - name: stream
-            version: "3.22"
+            version: "3.22.2"
         platform:
           - linux/amd64
           - linux/arm64
