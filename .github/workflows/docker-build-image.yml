@@ -1,8 +1,9 @@
 name: Build Multi-Arch "builda-bar" Container Images (x86_64 + arm64)
 
 on:
-  create:
-    ref_type: tag
+  push:
+    tags:
+      - 'v*'
   workflow_dispatch:
     inputs:
       tag_override:

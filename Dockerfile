@@ -19,9 +19,10 @@ LABEL org.opencontainers.image.licenses="Apache-2.0"
 LABEL org.opencontainers.image.created="${BUILD_DATE}"
 LABEL org.opencontainers.image.revision="${VCS_REF}"
 LABEL org.opencontainers.image.version="${VERSION}"
-LABEL alpine.variant="${VARIANT_NAME}"
-LABEL alpine.version="${ALPINE_VERSION}"
 LABEL org.opencontainers.image.authors="ByteHawks Contributors"
+LABEL org.bytehawks.alpine.variant="${VARIANT_NAME}"
+LABEL org.bytehawks.alpine.version="${ALPINE_VERSION}"
+
 
 RUN apk update && apk add --no-cache \
     linux-headers \
@@ -44,7 +45,15 @@ RUN apk update && apk add --no-cache \
     grep \
     sed
 
-WORKDIR /build
+RUN apk add --no-cache bash && \
+    addgroup -g 1024 bh && \
+    adduser -D -u 1024 -G bh -h /home/bh -s /bin/bash bh && \
+    mkdir -p /home/bh && \
+    chown -R bh:bh /home/bh && \
+    chmod -R 755 /home/bh
+
+USER bh
+WORKDIR /home/bh
 
 ENV PATH="/usr/local/bin:$PATH"
 ENV PYTHONUNBUFFERED=1
